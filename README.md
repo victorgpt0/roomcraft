@@ -3,30 +3,21 @@
 **RoomCraft** is a 2D-to-3D interior layout visualiser. Users lay out a room and
 its furniture on a top-down 2D grid and will later view the result in 3D.
 
-This repository contains **Checkpoint 1 – Technical Foundation**: a software
-rasteriser written from scratch in **pure C++17 with only the standard
-library**. There is no OpenGL, GLFW, ImGui or other graphics library. Every pixel is
-written by our own algorithms through a single function, `Canvas::setPixel`,
-and saved as an image file. The techniques are applied to RoomCraft objects:
-walls, the editor grid, furniture footprints, round tables, rugs, door swings
-and curved furniture.
-
 ![Complete RoomCraft floor plan rendered by the demo](docs/images/floor_plan.png)
 
 *The complete floor plan written by `roomcraft_demo` (1 pixel = 1 cm, room 5.6 m × 4.0 m).*
 
 ---
 
-## Group members and responsibilities
+## Group Members
 
-| Name | GitHub | Responsibilities |
-|---|---|---|
-| [Member 1 name] | [@github-username] | [e.g. lines and line clipping] |
-| [Member 2 name] | [@github-username] | [e.g. polygons, clipping and filling] |
-| [Member 3 name] | [@github-username] | [e.g. circles, ellipses and arcs] |
-| [Member 4 name] | [@github-username] | [e.g. curves, demo and documentation] |
-
-*Fill in the real names, usernames and responsibilities, and add or remove rows as needed.*
+| Name | GitHub |
+|---|---|
+| [Victor Gichuru] | [@victorgpt0] |
+| [Tobiko Leriari] | [@Leriari] |
+| [Kristein Mwaura] | [@Houstonsboy] |
+| [Emmanuel Oringe] | [@eoringe] |
+| [Joy Kipkemboi] | [@Joychepchumba] |
 
 ---
 
@@ -74,7 +65,7 @@ See [src/raster/types.h](src/raster/types.h).
 Every algorithm is commented in its source file: what it does, why it works,
 and how it fits the coordinate convention.
 
-### Notes for the assessment
+### More Notes
 
 - **Bresenham** uses only integer additions and comparisons. One decision
   variable, derived in the comments, covers all eight octants using step
@@ -92,36 +83,6 @@ and how it fits the coordinate convention.
   region-switch rule. The two-tip version keeps every pixel within half a
   pixel, with no gaps, for all 22,500 sizes from 1×1 to 150×150. Both
   versions use the same midpoint test, so the idea is unchanged.
-
----
-
-## Project structure
-
-```
-roomcraft/
-├── CMakeLists.txt
-├── src/
-│   ├── raster/              # the rasteriser (library "raster")
-│   │   ├── types.h          # Point, Color, Rect, coordinate convention
-│   │   ├── canvas.*         # pixel buffer, PPM and BMP export
-│   │   ├── line.*           # DDA, Bresenham, thick/dashed lines, Cohen–Sutherland
-│   │   ├── polygon.*        # transforms, area, centroid, point-in-polygon
-│   │   ├── clipping.*       # Sutherland–Hodgman
-│   │   ├── fill.*           # scanline fill, boundary fill
-│   │   ├── circle.*         # midpoint circle, filled circle, arcs
-│   │   ├── ellipse.*        # midpoint ellipse, filled ellipse
-│   │   └── curves.*         # Bézier, Catmull–Rom, B-spline
-│   └── roomcraft/
-│       └── furniture.*      # Furniture, hitTest, findFurnitureAt, fitsInRoom
-├── demo/
-│   └── roomcraft_demo.cpp   # writes one image per technique + a floor plan
-├── tests/                   # one test program per module (CTest)
-│   ├── test_helpers.h
-│   ├── test_*.cpp
-│   └── output/              # images written by the tests (git-ignored)
-├── demo_output/             # images written by the demo (git-ignored)
-└── docs/images/             # PNG copies of demo images used in this README
-```
 
 ---
 
@@ -167,9 +128,6 @@ Studio Installer → Modify).
   .\build-vs\Release\roomcraft_demo.exe
   ```
 
-> We have not been able to test the MSVC build yet, so `/W4` warnings have not
-> been checked. Please report any warnings.
-
 ### Linux / macOS
 
 You need a C++17 compiler (GCC or Clang) and CMake ≥ 3.20.
@@ -180,8 +138,6 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ./build/roomcraft_demo
 ```
-
-> Not yet tested on Linux or macOS. The code uses only standard C++17.
 
 ### Running a single test
 
