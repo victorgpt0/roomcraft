@@ -13,11 +13,13 @@ its furniture on a top-down 2D grid and will later view the result in 3D.
 
 | Name | GitHub |
 |---|---|
-| [Victor Gichuru] | [@victorgpt0] |
-| [Tobiko Leriari] | [@Leriari] |
-| [Kristein Mwaura] | [@Houstonsboy] |
-| [Emmanuel Oringe] | [@eoringe] |
-| [Joy Kipkemboi] | [@Joychepchumba] |
+| Victor Gichuru | [@victorgpt0](https://github.com/victorgpt0) |
+| Tobiko Leriari | [@Leriari](https://github.com/Leriari) |
+| Kristein Mwaura | [@Houstonsboy](https://github.com/Houstonsboy) |
+| Emmanuel Oringe | [@eoringe](https://github.com/eoringe) |
+| Joy Kipkemboi | [@Joychepchumba](https://github.com/Joychepchumba) |
+| [HM] Claude | [@claude](https://github.com/claude) |
+
 
 ---
 
