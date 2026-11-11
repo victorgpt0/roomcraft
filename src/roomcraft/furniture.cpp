@@ -3,6 +3,7 @@
 #include "raster/clipping.h"
 #include "raster/fill.h"
 #include "raster/line.h"
+#include "xform/mat3.h"
 
 #include <algorithm>
 #include <cmath>
@@ -20,8 +21,15 @@ raster::Polygon makeCircleFootprint(raster::Point center, float radius, int side
     return polygon;
 }
 
+// Local footprint -> room coordinates. With the default (identity) pose every
+// vertex is multiplied by 1 and has 0 added, so the result is bit-for-bit the
+// local footprint and Checkpoint 1 behaviour is unchanged.
+raster::Polygon worldFootprint(const Furniture& piece) {
+    return xform::transformPolygon(xform::poseMatrix(piece.pose), piece.footprint);
+}
+
 bool hitTest(const Furniture& piece, raster::Point point) {
-    return raster::pointInPolygon(piece.footprint, point);
+    return raster::pointInPolygon(worldFootprint(piece), point);
 }
 
 int findFurnitureAt(const std::vector<Furniture>& pieces, raster::Point point) {
@@ -34,11 +42,11 @@ int findFurnitureAt(const std::vector<Furniture>& pieces, raster::Point point) {
 }
 
 float areaInsideRoom(const Furniture& piece, const raster::Polygon& room) {
-    return raster::computeArea(raster::clipPolygonSutherlandHodgman(piece.footprint, room));
+    return raster::computeArea(raster::clipPolygonSutherlandHodgman(worldFootprint(piece), room));
 }
 
 bool fitsInRoom(const Furniture& piece, const raster::Polygon& room) {
-    const float total = raster::computeArea(piece.footprint);
+    const float total = raster::computeArea(worldFootprint(piece));
     if (total <= 0.0f) {
         return false; // a degenerate footprint is not a real piece of furniture
     }
@@ -48,8 +56,9 @@ bool fitsInRoom(const Furniture& piece, const raster::Polygon& room) {
 }
 
 void drawFurniture(raster::Canvas& canvas, const Furniture& piece) {
-    raster::fillPolygonScanline(canvas, piece.footprint, piece.color);
-    raster::drawPolygonOutline(canvas, piece.footprint, raster::Color{40, 40, 40});
+    const raster::Polygon world = worldFootprint(piece);
+    raster::fillPolygonScanline(canvas, world, piece.color);
+    raster::drawPolygonOutline(canvas, world, raster::Color{40, 40, 40});
 }
 
 } // namespace roomcraft
