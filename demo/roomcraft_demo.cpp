@@ -242,19 +242,19 @@ const Point kPlantCenter{574, 412};
 // searches this list from the top.
 std::vector<Furniture> makeFurniture() {
     std::vector<Furniture> pieces;
-    pieces.push_back({"Rug", makeEllipseFootprint(kRugCenter, kRugRadiusX, kRugRadiusY), kRug});
-    pieces.push_back({"Bed", raster::makeRectangle(60, 60, 140, 200), kBed});
-    pieces.push_back({"Nightstand", raster::makeRectangle(208, 60, 36, 36), kWood});
-    pieces.push_back({"Wardrobe", raster::makeRectangle(48, 290, 60, 140), kWood});
-    pieces.push_back({"L-shaped sofa", makeLSofa(), kSofa});
-    pieces.push_back({"Armchair", makeArmchair(), kSofa});
-    pieces.push_back({"Dining table", roomcraft::makeCircleFootprint(kTableCenter, kTableRadius, 64), kWood});
+    pieces.push_back({"Rug", makeEllipseFootprint(kRugCenter, kRugRadiusX, kRugRadiusY), kRug, {}});
+    pieces.push_back({"Bed", raster::makeRectangle(60, 60, 140, 200), kBed, {}});
+    pieces.push_back({"Nightstand", raster::makeRectangle(208, 60, 36, 36), kWood, {}});
+    pieces.push_back({"Wardrobe", raster::makeRectangle(48, 290, 60, 140), kWood, {}});
+    pieces.push_back({"L-shaped sofa", makeLSofa(), kSofa, {}});
+    pieces.push_back({"Armchair", makeArmchair(), kSofa, {}});
+    pieces.push_back({"Dining table", roomcraft::makeCircleFootprint(kTableCenter, kTableRadius, 64), kWood, {}});
     for (int i = 0; i < 4; ++i) {
         pieces.push_back({"Chair " + std::to_string(i + 1),
-                          roomcraft::makeCircleFootprint(kChairCenters[i], kChairRadius, 32), kChair});
+                          roomcraft::makeCircleFootprint(kChairCenters[i], kChairRadius, 32), kChair, {}});
     }
-    pieces.push_back({"Coffee table", makeKidneyTable(kRugCenter, 0.7f), kGlassTable});
-    pieces.push_back({"Plant", roomcraft::makeCircleFootprint(kPlantCenter, 14, 32), kPlant});
+    pieces.push_back({"Coffee table", makeKidneyTable(kRugCenter, 0.7f), kGlassTable, {}});
+    pieces.push_back({"Plant", roomcraft::makeCircleFootprint(kPlantCenter, 14, 32), kPlant, {}});
     return pieces;
 }
 
@@ -538,7 +538,7 @@ void imageFloorPlan(const std::string& dir, const std::vector<Furniture>& pieces
 // 7. Editor logic: simulated clicks select furniture (hit test), and a
 //    bookshelf pushed through the wall is flagged by fitsInRoom.
 void imageSelection(const std::string& dir, std::vector<Furniture> pieces) {
-    pieces.push_back({"Bookshelf", raster::makeRectangle(560, 260, 80, 36), kWood});
+    pieces.push_back({"Bookshelf", raster::makeRectangle(560, 260, 80, 36), kWood, {}});
     const Polygon room = roomOutline();
 
     Canvas canvas = blankCanvas(640, 500);
