@@ -111,9 +111,18 @@ constexpr int kHeight = 300;
 constexpr int kFps = 12;
 constexpr int kSceneCount = 6;
 constexpr float kSceneSeconds[kSceneCount] = {3.0f, 4.0f, 3.8f, 4.0f, 3.2f, 4.0f};
-constexpr float kTotalSeconds = 22.0f;
+constexpr float totalSeconds() {
+    float total = 0.0f;
+    for (float seconds : kSceneSeconds) {
+        total += seconds;
+    }
+    return total;
+}
+// Derived from the scene lengths so the story and the clips cannot disagree.
+constexpr float kTotalSeconds = totalSeconds();
 constexpr Rect kViewport{8.0f, 32.0f, 392.0f, 284.0f};
-constexpr std::uintmax_t kMaxFileBytes = 2U * 1024U * 1024U;
+// "Under 2 MB" read strictly: 2,000,000 bytes, not 2 MiB.
+constexpr std::uintmax_t kMaxFileBytes = 2000000U;
 
 // The same 5.6 m x 4.0 m room used by every CP1 and CP2 demo.
 constexpr float kRoomLeft = 40.0f;
@@ -125,7 +134,15 @@ constexpr float kDoorLeft = 440.0f;
 constexpr float kDoorRight = 520.0f;
 constexpr float kWindowLeft = 250.0f;
 constexpr float kWindowRight = 370.0f;
-constexpr Point kArmchairCentre{310.0f, 110.0f};
+constexpr Point kArmchairCentre{330.0f, 150.0f};
+
+// Scene 3 ends with the L-sofa reflected across the diagonal y = x, which
+// carries its top-right corner shape into the bottom-left corner. In pose form
+// that reflection is scaleX = -1 followed by a -90 degree turn:
+//   (x, y) -> (-x, y) -> (y, x).
+// checkDiagonalMirror() proves this against the textbook composite.
+const Pose kSofaArrived{{480.0f, 140.0f}, 0.0f, 1.0f, 1.0f};
+const Pose kSofaMirrored{{140.0f, 320.0f}, -90.0f, -1.0f, 1.0f};
 
 int failures = 0;
 
@@ -173,12 +190,6 @@ Polygon centredRect(float width, float height) {
     return raster::makeRectangle(-width / 2.0f, -height / 2.0f, width, height);
 }
 
-Polygon ellipse(float radiusX, float radiusY, int sides = 40) {
-    Polygon polygon = roomcraft::makeCircleFootprint({0.0f, 0.0f}, radiusX, sides);
-    raster::scale(polygon, 1.0f, radiusY / radiusX, {0.0f, 0.0f});
-    return polygon;
-}
-
 // An L-shaped sofa has a notch, so a horizontal reflection is easy to see.
 Polygon localLSofa() {
     Polygon sofa;
@@ -211,30 +222,44 @@ struct FurnitureSpec {
     float height; // height in the 3D preview, in centimetres
 };
 
+// The bottom-left corner is left empty on purpose: scene 3 mirrors the sofa
+// into it, and every later scene keeps it there.
 const std::vector<FurnitureSpec>& furnitureSpecs() {
     static const std::vector<FurnitureSpec> specs = {
         {"Rug", centredRect(112.0f, 80.0f), kRug, {{470.0f, 182.0f}, 0.0f, 1.0f, 1.0f}, 2.0f},
-        {"Bed", centredRect(140.0f, 200.0f), kBed, {{130.0f, 160.0f}, 0.0f, 1.0f, 1.0f}, 55.0f},
-        {"Nightstand", centredRect(36.0f, 36.0f), kWood, {{226.0f, 78.0f}, 0.0f, 1.0f, 1.0f}, 55.0f},
-        {"Wardrobe", centredRect(60.0f, 140.0f), kWood, {{78.0f, 360.0f}, 0.0f, 1.0f, 1.0f}, 200.0f},
-        {"L-sofa", localLSofa(), kSofa, {{480.0f, 140.0f}, 0.0f, 1.0f, 1.0f}, 80.0f},
+        // Head against the left wall: the local 140 x 200 bed turned 90 degrees.
+        {"Bed", centredRect(140.0f, 200.0f), kBed, {{160.0f, 130.0f}, 90.0f, 1.0f, 1.0f}, 55.0f},
+        {"Nightstand", centredRect(36.0f, 36.0f), kWood, {{282.0f, 78.0f}, 0.0f, 1.0f, 1.0f}, 55.0f},
+        {"Wardrobe", centredRect(60.0f, 140.0f), kWood, {{562.0f, 300.0f}, 0.0f, 1.0f, 1.0f}, 200.0f},
+        {"L-sofa", localLSofa(), kSofa, kSofaArrived, 80.0f},
         {"Armchair", centredRect(70.0f, 70.0f), kSofa, {{kArmchairCentre.x, kArmchairCentre.y}, 25.0f, 1.0f, 1.0f}, 85.0f},
         {"Dining table", roomcraft::makeCircleFootprint({0.0f, 0.0f}, 45.0f, 48), kWood,
-         {{200.0f, 360.0f}, 0.0f, 1.0f, 1.0f}, 75.0f},
+         {{330.0f, 360.0f}, 0.0f, 1.0f, 1.0f}, 75.0f},
         {"Plant", roomcraft::makeCircleFootprint({0.0f, 0.0f}, 14.0f, 24), kPot,
          {{574.0f, 412.0f}, 0.0f, 1.0f, 1.0f}, 120.0f},
     };
     return specs;
 }
 
+bool isSofa(const FurnitureSpec& spec) {
+    return spec.name == "L-sofa";
+}
+
 Furniture pieceFrom(const FurnitureSpec& spec, const Pose& pose) {
     return Furniture{spec.name, spec.local, spec.color, pose};
 }
 
-std::vector<Furniture> furnitureAtTargets() {
+// Where each piece stands after scene 3: the arrival targets, except that the
+// sofa now sits mirrored in the bottom-left corner. Scenes 4, 5 and 6 all use
+// this one layout, so the story stays continuous.
+Pose finalPose(const FurnitureSpec& spec) {
+    return isSofa(spec) ? kSofaMirrored : spec.target;
+}
+
+std::vector<Furniture> finalLayout() {
     std::vector<Furniture> pieces;
     for (const FurnitureSpec& spec : furnitureSpecs()) {
-        pieces.push_back(pieceFrom(spec, spec.target));
+        pieces.push_back(pieceFrom(spec, finalPose(spec)));
     }
     return pieces;
 }
@@ -431,30 +456,64 @@ void renderArrangeScene(Canvas& canvas, float t) {
 
 // ---- Scene 3: collision and mirror ----------------------------------------
 
+// The pose form of the diagonal mirror must equal the classic "reflection
+// about a line through the origin" composite R(45) * Rx * R(-45): turn the
+// line y = x onto the x axis, reflect across it, turn back. Both must also
+// have determinant -1 (a reflection flips orientation; a rotation never does).
+bool checkDiagonalMirror() {
+    const Mat3 composite = Mat3::rotation(45.0f) * Mat3::reflectionAcrossXAxis() *
+                           Mat3::rotation(-45.0f);
+    Pose atOrigin = kSofaMirrored;
+    atOrigin.position = {0.0f, 0.0f};
+    const Mat3 fromPose = xform::poseMatrix(atOrigin);
+
+    bool same = true;
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            same = same && std::fabs(composite.m[row][column] - fromPose.m[row][column]) < 1e-5f;
+        }
+    }
+    const bool flips = std::fabs(xform::determinant(fromPose) + 1.0f) < 1e-5f;
+    std::printf("  diagonal mirror: pose matrix %s R(45)*Rx*R(-45), det = %.3f\n",
+                same ? "==" : "!=", static_cast<double>(xform::determinant(fromPose)));
+    return same && flips;
+}
+
 void renderMirrorScene(Canvas& canvas, float t) {
     const Camera2D camera = planCamera();
     drawRoomThroughCamera(canvas, camera);
 
-    const std::vector<Furniture> context = {
-        {"Rug", ellipse(56.0f, 40.0f), kRug, {{470.0f, 182.0f}, 0.0f, 1.0f, 1.0f}},
-        {"Bed", centredRect(140.0f, 200.0f), kBed, {{130.0f, 160.0f}, 0.0f, 1.0f, 1.0f}},
-        {"Nightstand", centredRect(36.0f, 36.0f), kWood, {{226.0f, 78.0f}, 0.0f, 1.0f, 1.0f}},
-        {"Plant", roomcraft::makeCircleFootprint({0.0f, 0.0f}, 14.0f, 24), kPot,
-         {{574.0f, 412.0f}, 0.0f, 1.0f, 1.0f}},
-    };
+    // The scene starts exactly where scene 2 ended: every other piece stays
+    // put, and the bottom-left corner is the free space the sofa will take.
+    std::vector<Furniture> context;
+    for (const FurnitureSpec& spec : furnitureSpecs()) {
+        if (!isSofa(spec)) {
+            context.push_back(pieceFrom(spec, spec.target));
+        }
+    }
     drawPiecesThroughCamera(canvas, context, camera);
 
-    Furniture sofa{"L-sofa", localLSofa(), kSofa, {}};
+    // Push through the right wall, pull back, then one reflection plus a move
+    // carries the sofa into the opposite corner.
+    constexpr float kPullBack = 1.95f;
+    constexpr float kLanded = 3.3f;
+    const Pose pushed{{568.0f, 140.0f}, 0.0f, 1.0f, 1.0f};
     PoseTrack track;
-    track.addKey(0.0f, Pose{{430.0f, 250.0f}, 0.0f, 1.0f, 1.0f}, Easing::EaseInOut);
-    track.addKey(0.9f, Pose{{565.0f, 250.0f}, 0.0f, 1.0f, 1.0f}, Easing::EaseInOut);
-    track.addKey(1.3f, Pose{{585.0f, 260.0f}, 12.0f, 1.0f, 1.0f}, Easing::EaseInOut);
-    track.addKey(1.9f, Pose{{455.0f, 325.0f}, 0.0f, 1.0f, 1.0f}, Easing::EaseInOut);
-    // scaleX = -1 reflects the local footprint. The mirrored sofa then fits
-    // in the opposite (bottom-left) corner.
-    track.addKey(2.9f, Pose{{170.0f, 345.0f}, 0.0f, -1.0f, 1.0f}, Easing::EaseInOut);
-    sofa.pose = track.sample(t);
+    track.addKey(0.0f, kSofaArrived, Easing::Linear);
+    track.addKey(0.35f, kSofaArrived, Easing::Linear);
+    track.addKey(1.05f, pushed, Easing::EaseInOut);
+    track.addKey(1.45f, pushed, Easing::Linear);
+    track.addKey(kPullBack, kSofaArrived, Easing::EaseInOut);
+    track.addKey(kLanded, kSofaMirrored, Easing::EaseInOut);
 
+    const FurnitureSpec& sofaSpec = *std::find_if(furnitureSpecs().begin(), furnitureSpecs().end(), isSofa);
+    if (t > kPullBack && t < kLanded) {
+        // Destination outline, as in scene 2.
+        view::drawPolygonOutlineThroughCamera(
+            canvas, roomcraft::worldFootprint(pieceFrom(sofaSpec, kSofaMirrored)), camera, kGuide);
+    }
+
+    Furniture sofa = pieceFrom(sofaSpec, track.sample(t));
     const bool fits = roomcraft::fitsInRoom(sofa, roomOutline());
     sofa.color = fits ? kSofa : kWarningFill;
     drawPieceThroughCamera(canvas, sofa, camera);
@@ -469,17 +528,14 @@ void renderFanVacuumScene(Canvas& canvas, float t) {
     const Camera2D camera = planCamera();
     drawRoomThroughCamera(canvas, camera);
 
-    std::vector<Furniture> context;
-    for (const FurnitureSpec& spec : furnitureSpecs()) {
-        if (spec.name != "Rug" && spec.name != "Plant") {
-            context.push_back(pieceFrom(spec, spec.target));
-        }
-    }
-    drawPiecesThroughCamera(canvas, context, camera);
+    drawPiecesThroughCamera(canvas, finalLayout(), camera);
 
+    // From the doorway, round the dining table, into the crook of the mirrored
+    // sofa, along the foot of the bed and back across the rug. Every waypoint
+    // keeps the 16 cm vacuum clear of the furniture.
     const std::vector<Point> path = {
-        {480.0f, 405.0f}, {350.0f, 390.0f}, {325.0f, 275.0f}, {235.0f, 245.0f},
-        {245.0f, 165.0f}, {365.0f, 185.0f}, {400.0f, 290.0f}, {525.0f, 325.0f},
+        {480.0f, 410.0f}, {450.0f, 305.0f}, {330.0f, 268.0f}, {160.0f, 320.0f},
+        {160.0f, 250.0f}, {260.0f, 235.0f}, {400.0f, 250.0f}, {500.0f, 300.0f},
     };
     const float progress = clamp01(t / kSceneSeconds[3]);
 
@@ -568,7 +624,7 @@ void renderZoomScene(Canvas& canvas, float t) {
     view::zoomAbout(camera, factor, kArmchairCentre);
 
     drawRoomThroughCamera(canvas, camera);
-    drawPiecesThroughCamera(canvas, furnitureAtTargets(), camera);
+    drawPiecesThroughCamera(canvas, finalLayout(), camera);
 
     const Point anchor = view::roomToScreen(camera, kArmchairCentre);
     raster::drawLineBresenham(canvas, px(anchor.x) - 5, px(anchor.y), px(anchor.x) + 5,
@@ -606,7 +662,7 @@ const std::vector<Solid3D>& solids3D() {
         std::vector<Solid3D> built;
         built.push_back({scene::extrudedRoom(roomOutline(), 240.0f), kWall});
         for (const FurnitureSpec& spec : furnitureSpecs()) {
-            const Furniture piece = pieceFrom(spec, spec.target);
+            const Furniture piece = pieceFrom(spec, finalPose(spec));
             built.push_back(
                 {scene::extrude(roomcraft::worldFootprint(piece), spec.height),
                  darker(spec.color, 0.25f)});
@@ -637,7 +693,7 @@ void renderRevealScene(Canvas& canvas, float t) {
     // looks like the 2D plan and the 3D view keeps the colour coding.
     view::fillPlanPolygon(canvas, roomOutline(), 0.0f, viewProjection, kFloor, kViewport);
     for (const FurnitureSpec& spec : furnitureSpecs()) {
-        const Furniture piece = pieceFrom(spec, spec.target);
+        const Furniture piece = pieceFrom(spec, finalPose(spec));
         view::fillPlanPolygon(canvas, roomcraft::worldFootprint(piece), 0.0f, viewProjection,
                               lighter(spec.color, 0.25f), kViewport);
     }
@@ -661,7 +717,7 @@ const Caption kCaptions[kSceneCount] = {
     {"2/6  KEYFRAMES + EASING",
      "PoseTrack samples pose keys; easing and lerpPose fill the gaps."},
     {"3/6  WALL CHECK + REFLECTION",
-     "fitsInRoom turns it red; reflection moves it to the far corner."},
+     "fitsInRoom turns it red; a diagonal mirror fits the far corner."},
     {"4/6  HIERARCHY + PATH ANIMATION",
      "Blades inherit the hub; vacuum follows a constant-speed path."},
     {"5/6  2D CAMERA: WINDOW TO VIEWPORT",
@@ -782,6 +838,11 @@ int main(int argc, char** argv) {
     std::error_code error;
     std::filesystem::create_directories(directory, error);
     std::printf("RoomCraft CP2 Part 4b: integration showcase -> %s\n", directory.c_str());
+
+    if (!checkDiagonalMirror()) {
+        std::printf("  ERROR: the scene 3 mirror pose is not a reflection across y = x\n");
+        ++failures;
+    }
 
     // Write the six short clips first, then the continuous story. The short
     // clips are the ones copied to docs/images/cp2/ for the README.

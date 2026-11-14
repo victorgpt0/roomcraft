@@ -11,8 +11,8 @@ that uses all five libraries together, plus a shorter GIF for each scene.
 - `showcase_1_door.gif` — room reveal, hierarchy and the door swinging on its
   hinge.
 - `showcase_2_arrange.gif` — furniture arriving from keyframes with easing.
-- `showcase_3_mirror.gif` — a sofa pushed through a wall turns red, then is
-  reflected into the opposite corner.
+- `showcase_3_mirror.gif` — the sofa is pushed through a wall and turns red,
+  then a reflection across the diagonal carries it into the opposite corner.
 - `showcase_4_fan_vacuum.gif` — a hierarchical ceiling fan and a vacuum
   following a constant-speed Catmull–Rom path.
 - `showcase_5_zoom.gif` — the 2D camera zooms about the armchair and back out.
@@ -32,17 +32,24 @@ ctest --test-dir build --output-on-failure   # 21 tests, all pass
 ```
 
 The demo writes seven GIFs and fails if any output is missing or reaches
-2 MiB. Current sizes:
+2,000,000 bytes (2 MB read strictly, not 2 MiB). It also fails if the scene 3
+mirror pose is not a true reflection (see scene 3). Current sizes:
 
 | File | Frames | Size |
 |---|---:|---:|
 | `showcase_1_door.gif` | 36 | 199.5 KB |
-| `showcase_2_arrange.gif` | 48 | 343.1 KB |
-| `showcase_3_mirror.gif` | 46 | 317.8 KB |
-| `showcase_4_fan_vacuum.gif` | 48 | 383.7 KB |
-| `showcase_5_zoom.gif` | 38 | 196.8 KB |
-| `showcase_6_reveal.gif` | 48 | 325.5 KB |
-| `showcase.gif` | 264 | 1763.4 KB |
+| `showcase_2_arrange.gif` | 48 | 341.4 KB |
+| `showcase_3_mirror.gif` | 46 | 349.0 KB |
+| `showcase_4_fan_vacuum.gif` | 48 | 400.5 KB |
+| `showcase_5_zoom.gif` | 38 | 203.4 KB |
+| `showcase_6_reveal.gif` | 48 | 324.7 KB |
+| `showcase.gif` | 264 | 1814.3 KB |
+
+**One room, one story.** Scene 2 places the furniture with the bottom-left
+corner deliberately empty. Scene 3 starts from exactly that layout and ends
+with the sofa mirrored into that corner, and scenes 4, 5 and 6 all draw the
+same final layout (`finalLayout()` / `finalPose()`), so nothing jumps between
+scenes in the continuous GIF.
 
 `cp2_showcase` is also registered as CTest test 21, so the test suite writes
 and checks the whole integration.
@@ -107,25 +114,36 @@ and checks the whole integration.
 
 ## 3. A piece is pushed through a wall, turns red, and is mirrored
 
-1. **What technique?** A footprint-versus-room collision check plus a horizontal
-   reflection. Reflecting the local L-sofa across its local Y axis
-   (`scaleX = -1`) turns the notch the other way, so the mirrored sofa fits in
-   the opposite corner.
-2. **How was it implemented?** `renderMirrorScene()` drives the L-sofa with a
-   `PoseTrack` that moves it right through the wall, rotates it, then moves it
-   to the bottom-left with `scaleX = -1`. Every frame calls
-   `roomcraft::fitsInRoom(sofa, roomOutline())`; a failed fit changes the fill
-   to `kWarningFill` and adds a `kWarning` outline through
-   `view::drawPolygonOutlineThroughCamera`. The actual placed shape comes from
-   `roomcraft::worldFootprint`, which applies `xform::poseMatrix` and
-   `xform::transformPolygon`.
+1. **What technique?** A footprint-versus-room collision check plus a
+   reflection across the diagonal line `y = x`. The L-sofa's corner points to
+   the top-right, so it fits the top-right corner of the room. Reflecting it
+   across `y = x` turns its top bar into a left bar and its right leg into a
+   bottom bar: the same L now fits the bottom-left corner, the opposite one.
+   A plain left-right flip (`scaleX = -1` alone) would only fit the top-left.
+2. **How was it implemented?** `renderMirrorScene()` starts from scene 2's
+   final layout. A `PoseTrack` holds the sofa at `kSofaArrived`, pushes it to
+   x = 568 (through the right wall), pulls it back, then eases to
+   `kSofaMirrored = {(140, 320), -90°, scaleX -1}`. In pose form that is
+   `R(-90) * S(-1, 1)`: `(x, y) -> (-x, y) -> (y, x)`, which is exactly the
+   reflection across `y = x`. `checkDiagonalMirror()` proves it at start-up:
+   it builds the textbook composite `Mat3::rotation(45) *
+   Mat3::reflectionAcrossXAxis() * Mat3::rotation(-45)` (turn the mirror line
+   onto the x axis, reflect, turn back), compares it entry by entry with
+   `xform::poseMatrix(kSofaMirrored)`, and checks `xform::determinant == -1`.
+   The demo, and so the CTest test, fails if they differ. Every frame calls
+   `roomcraft::fitsInRoom(sofa, roomOutline())`; a failed fit changes the
+   fill to `kWarningFill` and adds a `kWarning` outline through
+   `view::drawPolygonOutlineThroughCamera`. While the sofa travels, its
+   destination is drawn as a faint outline, as in scene 2.
 3. **Which components use it?** `roomcraft` (`Furniture`, `fitsInRoom`,
-   `worldFootprint`), `xform` (pose matrix and polygon transform), `anim`
-   (`PoseTrack`), `view` (camera-space drawing).
+   `worldFootprint`), `xform` (`Mat3::rotation`, `reflectionAcrossXAxis`,
+   `poseMatrix`, `determinant`, `transformPolygon`), `anim` (`PoseTrack`),
+   `view` (camera-space drawing).
 4. **What does it achieve?** The red frame is a visible, geometry-driven
-   failure signal rather than a scripted colour change. The reflection is also
-   real geometry: the L-shape's notch changes side, which is why it clears the
-   bottom-left corner.
+   failure signal rather than a scripted colour change. The reflection is real
+   geometry: the determinant of -1 is what tells a reflection apart from any
+   rotation, and it is why the same L-shaped footprint fits snugly (20 cm
+   from both walls) into the corner diagonally opposite where it started.
 5. **Result:** `showcase_3_mirror.gif` (scene 3 of `showcase.gif`), 46 frames.
 
 ## 4. The ceiling fan spins and the vacuum follows its path
@@ -137,7 +155,10 @@ and checks the whole integration.
    `720°` over the scene spins every blade, while the fan node itself sways.
    The vacuum pose comes from
    `anim::poseOnPathConstantSpeed(path, progress, 512)`, so the heading follows
-   the spline and the speed stays uniform in arc length. The dashed trail is
+   the spline and the speed stays uniform in arc length. The eight waypoints
+   start at the doorway, go round the dining table, into the crook of the
+   mirrored sofa, along the foot of the bed and back over the rug, keeping
+   the 16 cm vacuum clear of every piece in `finalLayout()`. The dashed trail is
    drawn from fixed arc-length chord samples, not raw spline parameters. The
    vacuum body, top cap and direction arrow are transformed through
    `xform::poseMatrix` and drawn with `view` helpers.
@@ -162,8 +183,9 @@ and checks the whole integration.
 3. **Which components use it?** `view`, `raster`.
 4. **What does it achieve?** The armchair stays under the same screen pixel
    while the window shrinks around it; the room and furniture are drawn through
-   the same camera helpers, so only the mapping changes. The cross stayed at
-   pixel x = 189–199, y = 77–87 in every checked frame.
+   the same camera helpers, so only the mapping changes. Measured over all 38
+   frames, the cross stays at pixel x = 201–211, y = 100–111: it never moves
+   sideways, and only by one pixel vertically from rounding.
 5. **Result:** `showcase_5_zoom.gif` (scene 5 of `showcase.gif`), 38 frames.
 
 ## 6. 2D-to-3D reveal: extrusion, perspective projection and orbit
@@ -183,9 +205,9 @@ and checks the whole integration.
 3. **Which components use it?** `scene` (`extrude`, `extrudedRoom`), `xform`
    (`Vec3`, `WireMesh`), `view` (`Mat4`, `OrbitCamera`, `viewMatrix`,
    `fillPlanPolygon`, `drawWireMesh`), `roomcraft`, `raster`.
-4. **What does it achieve?** The reveal reuses the exact 2D footprints from
-   scenes 2–5, so the 3D objects correspond one-for-one to the furniture the
-   viewer already knows. Keeping the filled plan underneath preserves the
+4. **What does it achieve?** The reveal extrudes the exact footprints of
+   `finalLayout()`, including the mirrored sofa, so the 3D objects correspond
+   one-for-one to the furniture the viewer just watched in scenes 3–5. Keeping the filled plan underneath preserves the
    colour coding during the tilt.
 5. **Result:** `showcase_6_reveal.gif` (scene 6 of `showcase.gif`), 48 frames.
 
@@ -194,7 +216,7 @@ and checks the whole integration.
 | Layer | Functions used | Role in the showcase |
 |---|---|---|
 | `raster` | `Canvas`, `Polygon`, `fillPolygon`, lines, circles | Final pixel drawing for every scene. |
-| `xform` | `Mat3`, `poseMatrix`, `transformPoint`, `transformPolygon`, `Vec3`, `WireMesh` | Pivots, poses, reflections and 3D mesh data. |
+| `xform` | `Mat3` (`rotation`, `reflectionAcrossXAxis`, `operator*`), `determinant`, `poseMatrix`, `transformPoint`, `transformPolygon`, `Vec3`, `WireMesh` | Pivots, poses, the diagonal reflection check and 3D mesh data. |
 | `roomcraft` | `Furniture`, `worldFootprint`, `fitsInRoom`, `makeCircleFootprint` | Shared furniture model and collision check. |
 | `scene` | `Node`, `drawNode`, `extrude`, `extrudedRoom` | Door/fan hierarchies and 3D extrusion. |
 | `anim` | `FixedTimestep`, `PoseTrack`, `ease`, `lerp`, `lerpAngle`, `poseOnPathConstantSpeed` | Deterministic timing, keyframes and path motion. |
@@ -221,16 +243,45 @@ there is only one implementation of each technique.
   plus the 8 px margin they exceeded the 400 px canvas. Rewrote them to 61–63
   characters so every line fits inside the frame.
 - **The mirrored sofa would not fit if every other piece was kept.** The first
-  scene 3 context included all target furniture, which left no clear bottom-left
-  corner for the reflected L-sofa. The scene now keeps only the rug, bed,
-  nightstand and plant, and the sofa itself travels through the wall before
-  landing mirrored at `(170, 345)`. This keeps the collision failure and the
-  successful fit both readable.
+  scene 3 included all target furniture, which left no clear bottom-left
+  corner. The first fix dropped the wardrobe, dining table, armchair and sofa
+  from scene 3's backdrop and landed the sofa at `(170, 345)`. Watching the
+  continuous GIF frame by frame showed that this broke the story: four pieces
+  vanished at the cut from scene 2, the rug changed from a rectangle to an
+  ellipse, the sofa ended about 30 cm from both walls rather than in the
+  corner, and scenes 4–6 put it back in the top-right as if scene 3 never
+  happened. The final fix changes the layout instead of the backdrop. The bed
+  turns 90° against the left wall, the wardrobe moves to the right wall and
+  the dining table to the middle, so the bottom-left corner is free. Scene 3
+  then starts from scene 2's layout, and scenes 4–6 keep the mirrored sofa
+  through `finalLayout()`.
+- **`scaleX = -1` alone mirrors to the wrong corner.** A left-right flip
+  turns a top-right L into a top-left L, which is not the opposite corner. The
+  reflection that maps top-right to bottom-left is across the diagonal
+  `y = x`. `Pose` has no "mirror line" field, but `scaleX = -1` combined with
+  a -90° turn is exactly that reflection. `checkDiagonalMirror()` turns this
+  into a run-time check against `R(45) * Rx * R(-45)`, so a sign mistake in
+  the pose would fail the CTest test rather than just look slightly wrong.
+- **The new layout put the vacuum through the dining table.** After the
+  table moved to `(330, 360)`, the frame-by-frame check showed the vacuum
+  clipping the table's top edge between the second and third waypoints.
+  Lifting those waypoints to `(450, 305)` and `(330, 268)` keeps the spline,
+  including its bulge between keys, at least 16 cm above the table.
 - **The continuous GIF is the size risk.** The 22-second story is 264 frames
-  at 400 × 300. It measures 1,805,728 bytes (1763.4 KB), under the 2 MiB
-  limit, but close enough that future edits could break the rule silently.
-  The demo now checks every written GIF with `std::filesystem::file_size` and
-  returns a failure if any file reaches 2 MiB.
+  at 400 × 300 and now measures 1,857,851 bytes, close enough to the limit that
+  future edits could break the rule silently. The demo checks every written
+  GIF with `std::filesystem::file_size` and fails if any file reaches
+  2,000,000 bytes. That limit was originally 2 MiB (2,097,152 bytes), which
+  would have let a file of, say, 2.05 MB pass a "under 2 MB" rule.
+- **The scene lengths and the total could disagree.** `kTotalSeconds` was a
+  hand-typed 22 next to the six scene lengths. It is now computed from
+  `kSceneSeconds` at compile time, so changing one scene's length cannot cut
+  off the end of the continuous GIF.
+- **This part could not start until its five blockers were merged.** When the
+  work was first attempted, `dev` contained only `xform` and `output`, and the
+  `scene`, `view` and `anim` branches were still empty. Five of the six scenes
+  need at least one of those three, so the work waited for them rather than
+  stubbing another part's interfaces.
 
 ## Known limitations
 
