@@ -12,3 +12,13 @@ target_link_libraries(scene PUBLIC xform)
 roomcraft_warnings(scene)
 
 add_raster_test(test_scene scene)
+
+# Demo: fan, swivel chair, hinged door and the extruded room, written to
+# demo_output/cp2/ as animated GIFs.
+add_executable(cp2_scene_demo demo/cp2_scene_demo.cpp)
+target_link_libraries(cp2_scene_demo PRIVATE scene roomcraft output)
+target_compile_definitions(cp2_scene_demo PRIVATE
+    ROOMCRAFT_DEMO_OUTPUT_DIR="${ROOMCRAFT_DEMO_OUTPUT_DIR}"
+)
+roomcraft_warnings(cp2_scene_demo)
+add_test(NAME cp2_scene_demo COMMAND cp2_scene_demo ${ROOMCRAFT_DEMO_OUTPUT_DIR}/cp2)
