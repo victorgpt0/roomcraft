@@ -12,3 +12,5 @@ add_library(view STATIC
 target_include_directories(view PUBLIC src)
 target_link_libraries(view PUBLIC xform roomcraft)
 roomcraft_warnings(view)
+
+add_raster_test(test_view view)
