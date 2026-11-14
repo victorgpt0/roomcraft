@@ -341,7 +341,7 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 - [x] 3D `Mat4`, `lookAt`, orbit camera, orthographic/perspective projection
 - [x] Fixed timestep, interpolation, easing, keyframe tracks and constant-speed paths
 - [x] Six-scene integration showcase, per-scene GIFs and presenter notes
-- [x] CP2 tests, README and video script
+- [x] CP2 tests and README
 
 **Next: Checkpoint 3 - OpenGL integration.** The plan is to replace the
 software preview path with real-time OpenGL rendering, then add the interactive
