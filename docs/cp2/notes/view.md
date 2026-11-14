@@ -14,7 +14,7 @@ and applied to every vertex.
 
 ```sh
 cmake -S . -B build && cmake --build build
-ctest --test-dir build --output-on-failure   # 16 tests, all pass
+ctest --test-dir build --output-on-failure   # 20 tests, all pass
 ./build/cp2_view_demo                        # writes demo_output/cp2/view_*.gif
 ```
 
@@ -22,7 +22,7 @@ ctest --test-dir build --output-on-failure   # 16 tests, all pass
 |---|---|---|
 | `test_view` | 1,281 | 0 failed |
 | `cp2_view_demo` (writes all five GIFs) | runs as a test | pass |
-| The 14 tests already on `dev` | unchanged | pass |
+| The 18 tests already on `dev` | unchanged | pass |
 
 Tested with GCC 15.2 (MSYS2 UCRT64) on Windows 11, `-Wall -Wextra -Wpedantic`,
 no warnings.
