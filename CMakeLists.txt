@@ -79,3 +79,10 @@ add_raster_test(test_furniture roomcraft)
 
 # The demo must run and write all its images without errors.
 add_test(NAME roomcraft_demo COMMAND roomcraft_demo ${ROOMCRAFT_DEMO_OUTPUT_DIR})
+
+# --- Checkpoint 2 parts: one file per member, see docs/cp2/README.md --------
+foreach(cp2_part transform output scene view anim showcase)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/cp2_${cp2_part}.cmake)
+        include(${CMAKE_SOURCE_DIR}/cmake/cp2_${cp2_part}.cmake)
+    endif()
+endforeach()

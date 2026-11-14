@@ -11,7 +11,7 @@ namespace {
 const raster::Polygon kRoom = raster::makeRectangle(40, 40, 560, 400);
 
 roomcraft::Furniture make(const char* name, raster::Polygon footprint) {
-    return roomcraft::Furniture{name, footprint, raster::Color{200, 200, 200}};
+    return roomcraft::Furniture{name, footprint, raster::Color{200, 200, 200}, {}};
 }
 
 roomcraft::Furniture makeLSofa() {
