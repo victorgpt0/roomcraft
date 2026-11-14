@@ -26,8 +26,6 @@ the plan is extruded into a 3D orbit reveal.*
 | Kristein Mwaura | [@Houstonsboy](https://github.com/Houstonsboy) |
 | Emmanuel Oringe | [@eoringe](https://github.com/eoringe) |
 | Joy Kipkemboi | [@Joychepchumba](https://github.com/Joychepchumba) |
-| [HM] Claude | [@claude](https://github.com/claude) |
-
 
 ---
 
@@ -56,19 +54,19 @@ See [src/raster/types.h](src/raster/types.h).
 | Line drawing | DDA | [line.cpp](src/raster/line.cpp) | Comparison with Bresenham |
 | Line drawing | Bresenham / midpoint, integer-only, all 8 octants | [line.cpp](src/raster/line.cpp) | Every outline, grid line and wall |
 | Line operations | Thick lines (perpendicular width), dashed lines, polylines | [line.cpp](src/raster/line.cpp) | Walls, dimension lines, furniture outlines |
-| Line clipping | Cohen–Sutherland (region codes) | [line.cpp](src/raster/line.cpp) | Editor grid clipped to the room |
+| Line clipping | Cohen-Sutherland (region codes) | [line.cpp](src/raster/line.cpp) | Editor grid clipped to the room |
 | Polygon representation | Ordered vertex list | [polygon.h](src/raster/polygon.h) | Furniture footprints, room outline |
 | Polygon operations | Translate, rotate and scale about a pivot | [polygon.cpp](src/raster/polygon.cpp) | Moving, turning and resizing furniture |
 | Polygon measurements | Shoelace area, area centroid, bounding box | [polygon.cpp](src/raster/polygon.cpp) | Floor-space statistics, selection boxes |
 | Point in polygon | Even-odd ray casting | [polygon.cpp](src/raster/polygon.cpp) | Which piece of furniture was clicked |
-| Polygon clipping | Sutherland–Hodgman | [clipping.cpp](src/raster/clipping.cpp) | Does the furniture fit inside the room? |
+| Polygon clipping | Sutherland-Hodgman | [clipping.cpp](src/raster/clipping.cpp) | Does the furniture fit inside the room? |
 | Polygon filling | Scanline fill with an edge table and active edge table (even-odd, half-open rule) | [fill.cpp](src/raster/fill.cpp) | Solid furniture and floor; tiles without gaps or overlaps |
 | Region filling | Boundary fill, 4-connected, explicit stack | [fill.cpp](src/raster/fill.cpp) | "Paint bucket" for floor zones |
 | Circles | Midpoint circle with 8-way symmetry; filled disc | [circle.cpp](src/raster/circle.cpp) | Round tables, chairs, plant pots |
 | Arcs | Midpoint circle limited to an angle range | [circle.cpp](src/raster/circle.cpp) | Door swings |
 | Ellipses | Two-region midpoint ellipse with 4-way symmetry; filled ellipse | [ellipse.cpp](src/raster/ellipse.cpp) | Rugs, pillows |
 | Bézier curves | Cubic Bézier: Bernstein form **and** de Casteljau | [curves.cpp](src/raster/curves.cpp) | Curved sofa, kidney-shaped coffee table |
-| Splines | Catmull–Rom (passes through every point) | [curves.cpp](src/raster/curves.cpp) | Curtain track through clicked points |
+| Splines | Catmull-Rom (passes through every point) | [curves.cpp](src/raster/curves.cpp) | Curtain track through clicked points |
 | Splines (extra) | Uniform cubic B-spline (approximating) | [curves.cpp](src/raster/curves.cpp) | Smooth rounded outlines |
 | Editor logic | `hitTest`, `findFurnitureAt`, `fitsInRoom` | [furniture.cpp](src/roomcraft/furniture.cpp) | Selecting furniture, flagging furniture that sticks through a wall |
 
@@ -89,7 +87,7 @@ and how it fits the coordinate convention.
 - **The midpoint ellipse** traces region 1 from the top tip and region 2 from
   the side tip, splitting them at the slope = −1 point. The usual single-pass
   textbook loop put pixels up to a whole pixel off the curve on small or flat
-  ellipses: 21–128 of the 3,600 sizes from 1×1 to 60×60, depending on the
+  ellipses: 21-128 of the 3,600 sizes from 1×1 to 60×60, depending on the
   region-switch rule. The two-tip version keeps every pixel within half a
   pixel, with no gaps, for all 22,500 sizes from 1×1 to 150×150. Both
   versions use the same midpoint test, so the idea is unchanged.
@@ -108,15 +106,15 @@ libraries are `xform` (matrices and poses), `output` (GIF and text), `scene`
 |---|---|---|---|
 | 2D homogeneous transforms | 3×3 matrix product, inverse by adjugate, pivot composites | [mat3.cpp](src/xform/mat3.cpp) | Move, rotate, scale, mirror and undo furniture transforms |
 | Pose / model matrix | `T(position) · R(angle) · S(scale)`, then `worldFootprint` | [pose.cpp](src/xform/pose.cpp), [furniture.cpp](src/roomcraft/furniture.cpp) | One local footprint placed in the room by a pose |
-| Hierarchical transforms | Parent–child matrix stack; recursive draw and named world-matrix lookup | [node.cpp](src/scene/node.cpp) | Fan hub/blades, swivel chair parts, room and door |
+| Hierarchical transforms | Parent-child matrix stack; recursive draw and named world-matrix lookup | [node.cpp](src/scene/node.cpp) | Fan hub/blades, swivel chair parts, room and door |
 | 3D extrusion | Duplicate a footprint at floor and height, then join bottom ring, top ring and uprights | [extrude.cpp](src/scene/extrude.cpp) | Wireframe furniture and room walls |
 | Oblique projection | Cabinet/cavalier shear: `x += 0.5z·cos45°`, `y += 0.5z·sin45°` | [extrude.cpp](src/scene/extrude.cpp) | Temporary 3D preview before the CP2 cameras |
 | GIF89a container | Header, logical screen descriptor, global palette, loop extension, frame blocks, trailer | [gif.cpp](src/output/gif.cpp) | Looping RoomCraft animations |
-| LZW compression | Variable 9–12-bit dictionary, CLEAR/END codes and least-significant-bit packing | [gif.cpp](src/output/gif.cpp) | Small GIF files, e.g. 60 frames in 625 KB |
+| LZW compression | Variable 9-12-bit dictionary, CLEAR/END codes and least-significant-bit packing | [gif.cpp](src/output/gif.cpp) | Small GIF files, e.g. 60 frames in 625 KB |
 | Palette quantisation | Exact flat colours; 8×8×4 fixed fallback; nearest-RGB mapping when a palette freezes | [animation_writer.cpp](src/output/animation_writer.cpp) | Exact colours normally, sensible gradients when over 256 colours |
 | Bitmap text | 5×7 glyph table, 6-cell advance and integer scaling | [text.cpp](src/output/text.cpp) | Captions, labels and frame counters |
 | 2D camera | Window-to-viewport affine map, pan, zoom about an anchor, inverse mapping | [camera2d.cpp](src/view/camera2d.cpp) | Zoomed editor view, minimap and screen-to-room clicks |
-| 2D viewport clipping | Sutherland–Hodgman for polygons, Cohen–Sutherland for lines, applied after the camera transform | [camera2d.cpp](src/view/camera2d.cpp) | Clean cuts at the viewport edge |
+| 2D viewport clipping | Sutherland-Hodgman for polygons, Cohen-Sutherland for lines, applied after the camera transform | [camera2d.cpp](src/view/camera2d.cpp) | Clean cuts at the viewport edge |
 | 3D transforms | 4×4 homogeneous translation, rotation, scaling, `lookAt`, orthographic and perspective matrices | [mat4.cpp](src/view/mat4.cpp) | Camera and projection pipeline |
 | Orbit camera | Spherical radius/azimuth/elevation plus a tangent up vector that survives elevation 90° | [camera3d.cpp](src/view/camera3d.cpp) | Orbit animations and the top-down plan view |
 | Perspective divide and near clipping | Clip edges against the near plane in homogeneous clip space, divide by `w`, map NDC to the viewport | [camera3d.cpp](src/view/camera3d.cpp) | Correct wireframes even when geometry is behind the camera |
@@ -124,7 +122,7 @@ libraries are `xform` (matrices and poses), `output` (GIF and text), `scene`
 | Interpolation | Scalar `lerp`, shortest-arc `lerpAngle`, and `lerpPose` in pose parameter space | [easing.cpp](src/anim/easing.cpp) | Furniture moves and turns without shrinking |
 | Easing curves | Quadratic ease-in/out and cubic smoothstep ease-in-out | [easing.cpp](src/anim/easing.cpp) | Smooth acceleration and deceleration |
 | Keyframe tracks | Sorted keys, interval lookup, local time normalisation and per-key easing | [track.cpp](src/anim/track.cpp) | Furniture arrangement and collision scenes |
-| Catmull–Rom path motion | Spline evaluation with an arc-length table for constant speed and tangent heading | [path.cpp](src/anim/path.cpp) | Robot vacuum and other path animations |
+| Catmull-Rom path motion | Spline evaluation with an arc-length table for constant speed and tangent heading | [path.cpp](src/anim/path.cpp) | Robot vacuum and other path animations |
 | Integration timeline | Fixed-step scene dispatch, frame assembly, captions and progress bar | [cp2_showcase.cpp](demo/cp2_showcase.cpp) | The 22-second six-scene showcase |
 
 The dependency direction is one-way: `xform` supplies poses and matrices to
@@ -141,7 +139,7 @@ The build produces the libraries `raster`, `roomcraft`, `xform`, `output`,
 `scene`, `view` and `anim`; 14 unit-test executables; `roomcraft_demo`; and
 the six Checkpoint 2 demo executables.
 
-### Linux — Pop!_OS 24.04 (tested for this README)
+### Linux - Pop!_OS 24.04
 
 The commands below were run on Pop!_OS 24.04 with GCC 13.3.0, CMake 3.28.3
 and Unix Makefiles. A clean configure and build produced no warnings with
@@ -160,7 +158,7 @@ ctest --test-dir build --output-on-failure
 ./build/cp2_showcase demo_output/cp2
 ```
 
-### Windows – MSYS2 / MinGW (team-tested earlier in CP2)
+### Windows - MSYS2 / MinGW 
 
 Install [MSYS2](https://www.msys2.org/), then in an MSYS2 UCRT64 shell install
 the tools:
@@ -181,9 +179,8 @@ ctest --test-dir build --output-on-failure      # run all tests
 ```
 
 The team previously built and ran this setup with GCC 15.2 on Windows 11.
-It was not re-run for this documentation pass.
 
-### Windows – Visual Studio 2022
+### Windows - Visual Studio 2022
 
 The **"Desktop development with C++"** workload must be installed (Visual
 Studio Installer → Modify). This path was not re-tested for Checkpoint 2.
@@ -204,7 +201,7 @@ Studio Installer → Modify). This path was not re-tested for Checkpoint 2.
 ### macOS
 
 The Linux commands should also work with Clang and CMake ≥ 3.20, but macOS was
-not tested for this README.
+not tested for this project.
 
 ### Running a single test
 
@@ -262,7 +259,7 @@ click to the terminal.
 | `02_polygons` | Armchair translated, rotated and scaled about its centroid, with bounding boxes; L-shaped sofa whose centroid lies outside it |
 | `03_clipping_filling` | Furniture pushed through walls and clipped to the room, floor tiles with no gaps, boundary-filled play mat |
 | `04_circles_ellipses` | Round dining table and chairs, oval rug, pillows, plant pots, door swings |
-| `05_curves` | Bézier sofa with its control polygon, kidney coffee table, Catmull–Rom vs B-spline curtain track |
+| `05_curves` | Bézier sofa with its control polygon, kidney coffee table, Catmull-Rom vs B-spline curtain track |
 | `06_floor_plan` | The complete room |
 | `07_selection` | Simulated clicks (orange = selected piece) and a bookshelf sticking through the wall (red) |
 
@@ -271,10 +268,10 @@ click to the terminal.
 *`07_selection`: clicks (✕) select the topmost piece under the cursor;
 `fitsInRoom` flags the bookshelf pushed through the right wall.*
 
-![Curves: Bézier sofa and table, Catmull–Rom and B-spline through clicked points](docs/images/curves.png)
+![Curves: Bézier sofa and table, Catmull-Rom and B-spline through clicked points](docs/images/curves.png)
 
 *`05_curves`: a Bézier sofa with its dashed control polygon, a kidney table made
-of three Bézier curves, a Catmull–Rom spline (purple) passing through every
+of three Bézier curves, a Catmull-Rom spline (purple) passing through every
 clicked point ✕, and a B-spline (green) that smooths past them.*
 
 The Checkpoint 1 previews are PNG copies of the demo's BMP files, converted
@@ -296,26 +293,26 @@ All 21 passed on the tested Linux machine.
 | Test | Checks | What it verifies |
 |---|---|---|
 | `test_canvas` | 31 | Sizes ≤ 0 rejected; out-of-bounds pixels; PPM and BMP bytes read back |
-| `test_line` | 71,144 | Bresenham and DDA in all 961 directions with \|dx\|, \|dy\| ≤ 15: both endpoints, no gaps, one pixel per step, within ½ pixel of the ideal line; 16 Cohen–Sutherland cases; thick, dashed and polyline helpers |
+| `test_line` | 71,144 | Bresenham and DDA in all 961 directions with \|dx\|, \|dy\| ≤ 15: both endpoints, no gaps, one pixel per step, within ½ pixel of the ideal line; 16 Cohen-Sutherland cases; thick, dashed and polyline helpers |
 | `test_polygon` | 55 | Exact area 11250 and centroid (125, 100) of a known triangle; transformations; bounding box; point-in-polygon on concave shapes and vertex tie cases |
 | `test_clipping_fill` | 58 | Clipped square has the expected 4 vertices; clipped triangle has 5; filled rectangle has exactly w×h pixels; hexagon split into 6 triangles has 0 overlaps and 0 gaps; boundary fill handles a 1000×1000 area and leaks through a gap as expected |
-| `test_circle_ellipse` | 2,415 | Every circle radius 1–60 and ellipse 1×1–16×16: within ½ pixel, symmetric, no gaps; filled pixel count ≈ πr²; fill = outline + inside; arc ranges |
-| `test_curves` | 76 | Bézier end points exact; Bernstein = de Casteljau at 1,001 values of t; Catmull–Rom passes through every point with matching tangents at joints; B-spline properties |
+| `test_circle_ellipse` | 2,415 | Every circle radius 1-60 and ellipse 1×1-16×16: within ½ pixel, symmetric, no gaps; filled pixel count ≈ πr²; fill = outline + inside; arc ranges |
+| `test_curves` | 76 | Bézier end points exact; Bernstein = de Casteljau at 1,001 values of t; Catmull-Rom passes through every point with matching tangents at joints; B-spline properties |
 | `test_furniture` | 27 | Hit tests (including the inner corner of a concave sofa), topmost piece wins, `fitsInRoom` cases |
-| `roomcraft_demo` | – | The CP1 demo runs and writes all 7 image pairs |
+| `roomcraft_demo` | - | The CP1 demo runs and writes all 7 image pairs |
 
 ### Checkpoint 2 tests
 
 | Test | Checks | What it verifies |
 |---|---|---|
 | `test_mat3` | 4,683 | Homogeneous transforms against hand-computed points and the CP1 polygon operations; order and associativity; pivots; reflection determinant; inverse and singular matrices |
-| `test_pose` | 162 | Scale–rotate–move order; `worldFootprint`; hit testing and `fitsInRoom` on moved, turned, scaled and mirrored pieces; every drawn furniture pixel passes its hit test |
+| `test_pose` | 162 | Scale-rotate-move order; `worldFootprint`; hit testing and `fitsInRoom` on moved, turned, scaled and mirrored pieces; every drawn furniture pixel passes its hit test |
 | `test_gif` | 877 | GIF structure and delays; LZW round trips including code-size growth and table resets; palette fallback and freezing; per-pixel decode comparison |
 | `test_text` | 378 | Glyph cells for `A`, `7`, `g`; advance widths; all 95 glyphs distinct and in-cell; scaling; text clipped at every edge |
 | `test_scene` | 259 | Two- and three-level world matrices; parent/sibling isolation; hierarchy drawing; look-up by name; extrusion counts and rings; room helper; oblique projection |
 | `test_view` | 1,281 | Window-to-viewport corners and centre; pan/zoom anchor; inverse screen-to-room; viewport clipping; `Mat4` rotations; `lookAt`; orbit at elevation 90; orthographic/perspective; near-plane clipping and pixel-exact wireframes |
 | `test_anim` | 2,012 | Fixed timestep; lerp endpoints and angle wrapping; easing properties; `PoseTrack` ordering/clamping; path control points, heading and equal arc length per step |
-| `cp2_transform_demo`, `cp2_output_demo`, `cp2_scene_demo`, `cp2_view_demo`, `cp2_anim_demo`, `cp2_showcase` | – | Each demo runs and writes its expected images/GIFs |
+| `cp2_transform_demo`, `cp2_output_demo`, `cp2_scene_demo`, `cp2_view_demo`, `cp2_anim_demo`, `cp2_showcase` | - | Each demo runs and writes its expected images/GIFs |
 
 The seven CP2 unit tests contain 9,652 checks. These counts are the summaries
 printed by the current executables (`test_*: N checks, 0 failed`).
@@ -324,7 +321,7 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 
 ## Current progress
 
-**Checkpoint 1 – Technical Foundation: complete.**
+**Checkpoint 1 - Technical Foundation: complete.**
 
 - [x] Line drawing and line operations
 - [x] Polygon representation and operations
@@ -335,7 +332,7 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 - [x] Tests with real assertions, run by CTest
 - [x] GitHub repository with source, README and commit history
 
-**Checkpoint 2 – Transformations and Animation: complete.**
+**Checkpoint 2 - Transformations and Animation: complete.**
 
 - [x] 3×3 homogeneous transforms, matrix inverse and furniture poses
 - [x] GIF89a encoder with LZW, animation writer and 5×7 bitmap text
@@ -346,9 +343,9 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 - [x] Six-scene integration showcase, per-scene GIFs and presenter notes
 - [x] CP2 tests, README and video script
 
-**Next: Checkpoint 3 – OpenGL integration.** The plan is to replace the
+**Next: Checkpoint 3 - OpenGL integration.** The plan is to replace the
 software preview path with real-time OpenGL rendering, then add the interactive
-editor that CP2 deliberately left scripted. Lighting and colour pickers are
+editor that CP2 deliberately left out. Lighting and colour pickers are
 deferred until that editor exists.
 
 ---
@@ -357,7 +354,7 @@ deferred until that editor exists.
 
 **Geometry and editing**
 
-- **Sutherland–Hodgman needs a convex clip window.** `fitsInRoom` therefore
+- **Sutherland-Hodgman needs a convex clip window.** `fitsInRoom` therefore
   only works for convex rooms, such as rectangles. L-shaped rooms are not
   supported yet.
 - **Concave furniture clipped into separate pieces** comes back as one polygon
@@ -385,7 +382,7 @@ deferred until that editor exists.
 - **Wireframes only:** there is no hidden-line removal, so edges behind
   furniture remain visible.
 - **Only the near plane is clipped in 3D.** The far plane and sides are
-  handled by Cohen–Sutherland after projection, which is correct for lines.
+  handled by Cohen-Sutherland after projection, which is correct for lines.
 - **`fillPlanPolygon` skips a whole polygon** if any vertex is behind the near
   plane; it does not clip polygons in 3D. The demos keep the camera outside
   the room, so this does not occur there.
