@@ -2,6 +2,14 @@
 
 **RoomCraft** is a 2D-to-3D interior layout visualiser. Users lay out a room and
 its furniture on a top-down 2D grid and will later view the result in 3D.
+Checkpoint 2 adds matrices, cameras, a scene graph, animations and a from-scratch
+GIF encoder; the floor plan is still the single source of truth.
+
+![RoomCraft Checkpoint 2 integration showcase](docs/images/cp2/showcase.gif)
+
+*`showcase.gif` (22 s): the door opens, furniture arranges itself, a sofa is
+mirrored into the room, the fan and vacuum animate, the 2D camera zooms, and
+the plan is extruded into a 3D orbit reveal.*
 
 ![Complete RoomCraft floor plan rendered by the demo](docs/images/floor_plan.png)
 
@@ -30,8 +38,8 @@ its furniture on a top-down 2D grid and will later view the result in 3D.
 | Language | C++17 (standard library only) |
 | Build system | CMake ≥ 3.20 |
 | Tests | CTest, with a small assertion helper ([tests/test_helpers.h](tests/test_helpers.h)) |
-| Output | Binary PPM (P6) and 24-bit BMP, written by our own code |
-| Tested with | GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11 |
+| Output | Binary PPM (P6), 24-bit BMP, GIF89a animations and bitmap text, written by our own code |
+| Tested with | GCC 13.3.0 + CMake 3.28.3 on Pop!_OS 24.04 (Linux); also GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11 in earlier CP2 work |
 | Version control | Git / GitHub |
 
 ---
@@ -88,12 +96,71 @@ and how it fits the coordinate convention.
 
 ---
 
+## Checkpoint 2: transformations and animation
+
+Checkpoint 2 turns the fixed 1 pixel = 1 cm floor plan into a scene that can be
+placed, animated, viewed through cameras and exported as a GIF. The new
+libraries are `xform` (matrices and poses), `output` (GIF and text), `scene`
+(hierarchy and extrusion), `view` (2D/3D cameras and projection) and `anim`
+(timing, interpolation, keyframes and paths).
+
+| Technique | Algorithm | Source file | RoomCraft use |
+|---|---|---|---|
+| 2D homogeneous transforms | 3×3 matrix product, inverse by adjugate, pivot composites | [mat3.cpp](src/xform/mat3.cpp) | Move, rotate, scale, mirror and undo furniture transforms |
+| Pose / model matrix | `T(position) · R(angle) · S(scale)`, then `worldFootprint` | [pose.cpp](src/xform/pose.cpp), [furniture.cpp](src/roomcraft/furniture.cpp) | One local footprint placed in the room by a pose |
+| Hierarchical transforms | Parent–child matrix stack; recursive draw and named world-matrix lookup | [node.cpp](src/scene/node.cpp) | Fan hub/blades, swivel chair parts, room and door |
+| 3D extrusion | Duplicate a footprint at floor and height, then join bottom ring, top ring and uprights | [extrude.cpp](src/scene/extrude.cpp) | Wireframe furniture and room walls |
+| Oblique projection | Cabinet/cavalier shear: `x += 0.5z·cos45°`, `y += 0.5z·sin45°` | [extrude.cpp](src/scene/extrude.cpp) | Temporary 3D preview before the CP2 cameras |
+| GIF89a container | Header, logical screen descriptor, global palette, loop extension, frame blocks, trailer | [gif.cpp](src/output/gif.cpp) | Looping RoomCraft animations |
+| LZW compression | Variable 9–12-bit dictionary, CLEAR/END codes and least-significant-bit packing | [gif.cpp](src/output/gif.cpp) | Small GIF files, e.g. 60 frames in 625 KB |
+| Palette quantisation | Exact flat colours; 8×8×4 fixed fallback; nearest-RGB mapping when a palette freezes | [animation_writer.cpp](src/output/animation_writer.cpp) | Exact colours normally, sensible gradients when over 256 colours |
+| Bitmap text | 5×7 glyph table, 6-cell advance and integer scaling | [text.cpp](src/output/text.cpp) | Captions, labels and frame counters |
+| 2D camera | Window-to-viewport affine map, pan, zoom about an anchor, inverse mapping | [camera2d.cpp](src/view/camera2d.cpp) | Zoomed editor view, minimap and screen-to-room clicks |
+| 2D viewport clipping | Sutherland–Hodgman for polygons, Cohen–Sutherland for lines, applied after the camera transform | [camera2d.cpp](src/view/camera2d.cpp) | Clean cuts at the viewport edge |
+| 3D transforms | 4×4 homogeneous translation, rotation, scaling, `lookAt`, orthographic and perspective matrices | [mat4.cpp](src/view/mat4.cpp) | Camera and projection pipeline |
+| Orbit camera | Spherical radius/azimuth/elevation plus a tangent up vector that survives elevation 90° | [camera3d.cpp](src/view/camera3d.cpp) | Orbit animations and the top-down plan view |
+| Perspective divide and near clipping | Clip edges against the near plane in homogeneous clip space, divide by `w`, map NDC to the viewport | [camera3d.cpp](src/view/camera3d.cpp) | Correct wireframes even when geometry is behind the camera |
+| Fixed timestep | `Δt = 1/fps`, frame count, frame time and normalised progress | [track.cpp](src/anim/track.cpp) | Deterministic, reproducible animations |
+| Interpolation | Scalar `lerp`, shortest-arc `lerpAngle`, and `lerpPose` in pose parameter space | [easing.cpp](src/anim/easing.cpp) | Furniture moves and turns without shrinking |
+| Easing curves | Quadratic ease-in/out and cubic smoothstep ease-in-out | [easing.cpp](src/anim/easing.cpp) | Smooth acceleration and deceleration |
+| Keyframe tracks | Sorted keys, interval lookup, local time normalisation and per-key easing | [track.cpp](src/anim/track.cpp) | Furniture arrangement and collision scenes |
+| Catmull–Rom path motion | Spline evaluation with an arc-length table for constant speed and tangent heading | [path.cpp](src/anim/path.cpp) | Robot vacuum and other path animations |
+| Integration timeline | Fixed-step scene dispatch, frame assembly, captions and progress bar | [cp2_showcase.cpp](demo/cp2_showcase.cpp) | The 22-second six-scene showcase |
+
+The dependency direction is one-way: `xform` supplies poses and matrices to
+`scene` and `view`; `scene` supplies meshes to `view`; `anim` supplies poses to
+`roomcraft` furniture; and `output` writes whatever the rasterizer drew. The
+showcase is the integration point that uses all five libraries in one
+timeline.
+
+---
+
 ## How to compile and run
 
-The build produces the `raster` and `roomcraft` libraries, seven test programs
-and the `roomcraft_demo` executable.
+The build produces the libraries `raster`, `roomcraft`, `xform`, `output`,
+`scene`, `view` and `anim`; 14 unit-test executables; `roomcraft_demo`; and
+the six Checkpoint 2 demo executables.
 
-### Windows – MSYS2 / MinGW (the setup we tested)
+### Linux — Pop!_OS 24.04 (tested for this README)
+
+The commands below were run on Pop!_OS 24.04 with GCC 13.3.0, CMake 3.28.3
+and Unix Makefiles. A clean configure and build produced no warnings with
+`-Wall -Wextra -Wpedantic`.
+
+```sh
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+./build/roomcraft_demo
+./build/cp2_transform_demo
+./build/cp2_output_demo
+./build/cp2_scene_demo
+./build/cp2_view_demo
+./build/cp2_anim_demo
+./build/cp2_showcase demo_output/cp2
+```
+
+### Windows – MSYS2 / MinGW (team-tested earlier in CP2)
 
 Install [MSYS2](https://www.msys2.org/), then in an MSYS2 UCRT64 shell install
 the tools:
@@ -109,37 +176,35 @@ $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"   # once per terminal
 cmake -S . -B build -G Ninja                    # configure (once)
 cmake --build build                             # build
 ctest --test-dir build --output-on-failure      # run all tests
-.\build\roomcraft_demo.exe                      # write the demo images
+.\build\roomcraft_demo.exe                      # write the CP1 images
+.\build\cp2_showcase.exe demo_output\cp2        # write the CP2 GIFs
 ```
+
+The team previously built and ran this setup with GCC 15.2 on Windows 11.
+It was not re-run for this documentation pass.
 
 ### Windows – Visual Studio 2022
 
 The **"Desktop development with C++"** workload must be installed (Visual
-Studio Installer → Modify).
+Studio Installer → Modify). This path was not re-tested for Checkpoint 2.
 
 - **From the IDE:** *File → Open → Folder…* and pick the project folder.
   Visual Studio detects `CMakeLists.txt`. Build with *Build → Build All*, run
   the tests from the *Test Explorer*, and choose `roomcraft_demo.exe` as the
-  startup item to run the demo.
+  startup item to run the CP1 demo.
 - **From a "Developer PowerShell for VS 2022":**
 
   ```powershell
   cmake -S . -B build-vs -G "Visual Studio 17 2022"
   cmake --build build-vs --config Release
   ctest --test-dir build-vs -C Release --output-on-failure
-  .\build-vs\Release\roomcraft_demo.exe
+  .\build-vs\Release\cp2_showcase.exe demo_output\cp2
   ```
 
-### Linux / macOS
+### macOS
 
-You need a C++17 compiler (GCC or Clang) and CMake ≥ 3.20.
-
-```sh
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-./build/roomcraft_demo
-```
+The Linux commands should also work with Clang and CMake ≥ 3.20, but macOS was
+not tested for this README.
 
 ### Running a single test
 
@@ -152,11 +217,21 @@ exits with a non-zero code if any check fails.
 
 ---
 
-## How to view the output images
+## How to view the output images and animations
+
+All demos write under `demo_output/`; the Checkpoint 2 demos write under
+`demo_output/cp2/`. That folder is git-ignored, so run the demo to produce the
+files. The best results are copied to `docs/images/cp2/` for this README.
 
 | Program | Writes to | Files |
 |---|---|---|
 | `roomcraft_demo` | `demo_output/` (or a folder given as the first argument) | `01_lines` … `07_selection`, each as `.bmp` and `.ppm` |
+| `cp2_transform_demo` | `demo_output/cp2/` | `transform_basic`, `transform_order`, `transform_pivot`, `transform_mirror`, `transform_pose` (`.bmp`) |
+| `cp2_output_demo` | `demo_output/cp2/` | `output_first_animation.gif`, `output_font.bmp`, `output_palette.gif` |
+| `cp2_scene_demo` | `demo_output/cp2/` | `scene_fan.gif`, `scene_chair.gif`, `scene_door.gif`, `scene_room_3d.gif` |
+| `cp2_view_demo` | `demo_output/cp2/` | `view_zoom.gif`, `view_minimap.gif`, `view_orbit.gif`, `view_projection.gif`, `view_reveal.gif` |
+| `cp2_anim_demo` | `demo_output/cp2/` | `anim_easing.gif`, `anim_arrange.gif`, `anim_collision.gif`, `anim_vacuum.gif` |
+| `cp2_showcase` | `demo_output/cp2/` (or a folder given as the first argument) | `showcase.gif` plus `showcase_1_door.gif` … `showcase_6_reveal.gif` |
 | `test_*` | `tests/output/` | one image per test, `.bmp` and `.ppm` |
 
 - **`.bmp`** opens directly in Windows Photos, macOS Preview and most image
@@ -164,9 +239,22 @@ exits with a non-zero code if any check fails.
 - **`.ppm`** is the simplest image format (a short text header followed by raw
   RGB bytes). Windows cannot open it without extra software; use GIMP or
   IrfanView, or an image viewer on Linux.
+- **`.gif`** animations open and loop in a browser, Windows Photos, macOS
+  Preview and most image viewers. They are written by the program's own GIF89a
+  encoder, not by an external tool.
 
-The demo also prints the area of each piece of furniture, a fit check and the
-result of each simulated click to the terminal.
+Each CP2 demo prints what it wrote and where. `roomcraft_demo` also prints the
+area of each piece of furniture, a fit check and the result of each simulated
+click to the terminal.
+
+| Checkpoint 2 demo | What it shows |
+|---|---|
+| `cp2_transform_demo` | Basic matrices, order of composition, pivot rotation, reflection/shear and one pose placed six ways |
+| `cp2_output_demo` | A 60-frame animation, the full 5×7 font sheet, and the fixed-palette fallback for a 61,727-colour gradient |
+| `cp2_scene_demo` | Hierarchical fan/chair/door motion, extrusion and the oblique 3D preview |
+| `cp2_view_demo` | Pan/zoom, minimap, orbit, orthographic-versus-perspective comparison and the 2D-to-3D reveal |
+| `cp2_anim_demo` | Easing comparison, keyframed arrangement, wall-collision feedback and the constant-speed vacuum path |
+| `cp2_showcase` | The complete six-scene integration story and each scene as a shorter clip |
 
 | Demo image | Shows |
 |---|---|
@@ -189,15 +277,21 @@ result of each simulated click to the terminal.
 of three Bézier curves, a Catmull–Rom spline (purple) passing through every
 clicked point ✕, and a B-spline (green) that smooths past them.*
 
-The README images are PNG copies of the demo's BMP files, converted with
-Windows' built-in image tools so that GitHub can display them. The program
-itself writes only BMP and PPM.
+The Checkpoint 1 previews are PNG copies of the demo's BMP files, converted
+with Windows' built-in image tools. The CP2 transform and font previews are
+PNG copies of the BMP output, converted with ImageMagick as recorded in the
+notes; every CP2 GIF in `docs/images/cp2/` is written by the program itself and
+committed unmodified. The program writes BMP, PPM and GIF.
 
 ---
 
 ## Testing
 
-Every test checks real properties, not just that the code runs:
+Every test checks real properties, not just that the code runs. CTest runs 21
+tests: 14 unit-test executables, `roomcraft_demo`, and the six CP2 demos.
+All 21 passed on the tested Linux machine.
+
+### Checkpoint 1 tests
 
 | Test | Checks | What it verifies |
 |---|---|---|
@@ -208,7 +302,23 @@ Every test checks real properties, not just that the code runs:
 | `test_circle_ellipse` | 2,415 | Every circle radius 1–60 and ellipse 1×1–16×16: within ½ pixel, symmetric, no gaps; filled pixel count ≈ πr²; fill = outline + inside; arc ranges |
 | `test_curves` | 76 | Bézier end points exact; Bernstein = de Casteljau at 1,001 values of t; Catmull–Rom passes through every point with matching tangents at joints; B-spline properties |
 | `test_furniture` | 27 | Hit tests (including the inner corner of a concave sofa), topmost piece wins, `fitsInRoom` cases |
-| `roomcraft_demo` | – | The demo runs and writes all 7 images |
+| `roomcraft_demo` | – | The CP1 demo runs and writes all 7 image pairs |
+
+### Checkpoint 2 tests
+
+| Test | Checks | What it verifies |
+|---|---|---|
+| `test_mat3` | 4,683 | Homogeneous transforms against hand-computed points and the CP1 polygon operations; order and associativity; pivots; reflection determinant; inverse and singular matrices |
+| `test_pose` | 162 | Scale–rotate–move order; `worldFootprint`; hit testing and `fitsInRoom` on moved, turned, scaled and mirrored pieces; every drawn furniture pixel passes its hit test |
+| `test_gif` | 877 | GIF structure and delays; LZW round trips including code-size growth and table resets; palette fallback and freezing; per-pixel decode comparison |
+| `test_text` | 378 | Glyph cells for `A`, `7`, `g`; advance widths; all 95 glyphs distinct and in-cell; scaling; text clipped at every edge |
+| `test_scene` | 259 | Two- and three-level world matrices; parent/sibling isolation; hierarchy drawing; look-up by name; extrusion counts and rings; room helper; oblique projection |
+| `test_view` | 1,281 | Window-to-viewport corners and centre; pan/zoom anchor; inverse screen-to-room; viewport clipping; `Mat4` rotations; `lookAt`; orbit at elevation 90; orthographic/perspective; near-plane clipping and pixel-exact wireframes |
+| `test_anim` | 2,012 | Fixed timestep; lerp endpoints and angle wrapping; easing properties; `PoseTrack` ordering/clamping; path control points, heading and equal arc length per step |
+| `cp2_transform_demo`, `cp2_output_demo`, `cp2_scene_demo`, `cp2_view_demo`, `cp2_anim_demo`, `cp2_showcase` | – | Each demo runs and writes its expected images/GIFs |
+
+The seven CP2 unit tests contain 9,652 checks. These counts are the summaries
+printed by the current executables (`test_*: N checks, 0 failed`).
 
 ---
 
@@ -225,11 +335,27 @@ Every test checks real properties, not just that the code runs:
 - [x] Tests with real assertions, run by CTest
 - [x] GitHub repository with source, README and commit history
 
-**Planned for later checkpoints:** interactive 2D editor, 3D view of the layout.
+**Checkpoint 2 – Transformations and Animation: complete.**
+
+- [x] 3×3 homogeneous transforms, matrix inverse and furniture poses
+- [x] GIF89a encoder with LZW, animation writer and 5×7 bitmap text
+- [x] Hierarchical scene graph, extrusion and oblique 3D preview
+- [x] 2D window-to-viewport camera, pan, zoom and screen-to-room mapping
+- [x] 3D `Mat4`, `lookAt`, orbit camera, orthographic/perspective projection
+- [x] Fixed timestep, interpolation, easing, keyframe tracks and constant-speed paths
+- [x] Six-scene integration showcase, per-scene GIFs and presenter notes
+- [x] CP2 tests, README and video script
+
+**Next: Checkpoint 3 – OpenGL integration.** The plan is to replace the
+software preview path with real-time OpenGL rendering, then add the interactive
+editor that CP2 deliberately left scripted. Lighting and colour pickers are
+deferred until that editor exists.
 
 ---
 
 ## Known limitations
+
+**Geometry and editing**
 
 - **Sutherland–Hodgman needs a convex clip window.** `fitsInRoom` therefore
   only works for convex rooms, such as rectangles. L-shaped rooms are not
@@ -250,10 +376,42 @@ Every test checks real properties, not just that the code runs:
 - **Ellipses are axis-aligned only.** Rotated ellipses are not supported.
 - **Round furniture** uses a many-sided polygon footprint for hit testing and
   fit checks, while it is drawn with the exact midpoint circle.
-- **No text.** Labels and measurements are printed to the terminal, not drawn
-  in the images.
-- **No interactive editor yet:** clicks in the demo are simulated.
-- **Images are BMP/PPM only.** The PNG images in this README were converted
-  with external tools.
-- **Platform testing:** only tested with GCC 15.2 on Windows. MSVC (`/W4`),
-  Clang, Linux and macOS builds are untested.
+- **No interactive editor yet.** CP2 animations are scripted; selecting,
+  dragging and editing in real time waits for the CP3 OpenGL layer. There is
+  no lighting or colour picker yet either.
+
+**3D viewing**
+
+- **Wireframes only:** there is no hidden-line removal, so edges behind
+  furniture remain visible.
+- **Only the near plane is clipped in 3D.** The far plane and sides are
+  handled by Cohen–Sutherland after projection, which is correct for lines.
+- **`fillPlanPolygon` skips a whole polygon** if any vertex is behind the near
+  plane; it does not clip polygons in 3D. The demos keep the camera outside
+  the room, so this does not occur there.
+
+**Animation and output**
+
+- **At most 256 colours per GIF**, with no dithering, so gradients show bands.
+  If the 257th colour appears after the first frame, the palette freezes and
+  later colours are approximated by the nearest existing entry.
+- **Every GIF frame stores the whole picture.** Frames are not reduced to the
+  changed region, so files are larger than an optimising encoder would make.
+- **GIF frame timing has 0.01 s resolution and a 0.02 s minimum.** The 12 fps
+  showcase is therefore stored as 80 ms per frame and plays at 12.5 fps.
+- **Text is one line of a fixed-width ASCII font.** Non-ASCII characters are
+  drawn as one box per byte, and lower-case descenders are squeezed into the
+  seven-row cell.
+- **`PoseTrack` interpolates position linearly** between keyframes. Curved
+  trajectories need `poseOnPathConstantSpeed`, and the arc-length table is
+  rebuilt on each call.
+- **Matrices store `float`.** Transform tests bound room-sized error to a few
+  thousandths of a pixel, but very long accumulated products will drift;
+  rebuilding from a pose each frame avoids this.
+
+**Platform testing**
+
+- Tested for this README with GCC 13.3.0, CMake 3.28.3 and Unix Makefiles on
+  Pop!_OS 24.04 (Linux).
+- The team previously tested GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11.
+  MSVC (`/W4`), Clang and macOS were not tested for CP2.
