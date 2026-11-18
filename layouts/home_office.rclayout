@@ -1,0 +1,13 @@
+roomcraft-layout 1
+# A small home office that doubles as a guest room.
+# Format: item <type> <x> <y> <angle> <scaleX> <scaleY> <heightScale> <r g b> <name>
+room 450.00 380.00 250.00 186 160 128 232 236 240
+item rug 230.00 255.00 0.00 0.90 0.90 1.00 120 100 140 Rug
+item desk 225.00 40.00 0.00 1.00 1.00 1.00 200 200 195 Desk
+item office_chair 225.00 105.00 180.00 1.00 1.00 1.00 50 55 65 Desk chair
+item bookshelf 420.00 190.00 90.00 1.00 1.00 1.00 181 136 99 Bookshelf
+item bed_single 60.00 270.00 0.00 1.00 1.00 1.00 150 170 120 Guest bed
+item nightstand 60.00 135.00 0.00 1.00 1.00 1.00 181 136 99 Nightstand
+item armchair 330.00 310.00 210.00 1.00 1.00 1.00 170 110 80 Armchair
+item plant 420.00 40.00 0.00 1.00 1.00 1.00 70 140 70 Plant
+item floor_lamp 425.00 350.00 0.00 1.00 1.00 1.00 230 215 170 Floor lamp
