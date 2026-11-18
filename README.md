@@ -163,8 +163,9 @@ orbit camera drive the GPU through our GLSL shaders (no GLM, no engine).
 - **Room:** change its width, depth and wall height, and the floor and wall
   colours.
 - **2D ↔ 3D:** switch with Tab. An animated transition grows the furniture out
-  of the plan. In 3D, orbit, zoom towards the mouse and pan; walls between the
-  camera and the room are cut away.
+  of the plan. In 3D, rotate the view (drag empty floor, right-drag, Q/E, the
+  corner buttons or auto-rotate), zoom towards the mouse and pan; walls
+  between the camera and the room are cut away.
 - **Lighting:** a sun (directional) and a ceiling lamp (point light) with
   Blinn–Phong shading, floor shadows, and Day/Evening/Night presets.
 - **Checks:** pieces through a wall turn red, colliding pieces amber; the
@@ -183,11 +184,15 @@ orbit camera drive the GPU through our GLSL shaders (no GLM, no engine).
 | Input | Action |
 |---|---|
 | Left click / drag | Select / move a piece (click empty floor to deselect) |
-| Right drag | 3D: orbit · 2D: pan |
+| Left drag on empty floor (3D) | Rotate the view |
+| Right drag | 3D: rotate the view · 2D: pan |
+| Q / E, Page Up / Page Down | Turn the 3D view left / right, look from higher / lower |
+| Arrow keys, nothing selected | Turn and tilt the 3D view |
+| Corner buttons in the view | Rotate, reset the angle, auto-rotate (turntable) |
 | Middle drag | Pan |
 | Wheel / Shift+wheel | Zoom towards the mouse / rotate the selected piece |
 | R, Shift+R | Rotate ±15° |
-| Arrow keys (Shift) | Nudge by one grid step (1 cm) |
+| Arrow keys with a piece selected (Shift) | Nudge it by one grid step (1 cm) |
 | Del, Ctrl+D | Delete, duplicate |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | Tab, F, G | 2D/3D, frame the room, snap on/off |
@@ -201,7 +206,7 @@ orbit camera drive the GPU through our GLSL shaders (no GLM, no engine).
 | Extrusion to lit meshes | Prism sides with outward normals `(dy, −dx)`, CCW front faces, triangulated caps | [mesh.cpp](src/editor/mesh.cpp) | Furniture parts, walls with door/window openings |
 | Hierarchical models | Room → piece (pose matrix) → parts (local polygons + height ranges) | [catalogue.cpp](src/editor/catalogue.cpp), [mesh.cpp](src/editor/mesh.cpp) | 18 multi-part furniture models |
 | 2D ↔ 3D transition | Eased blend of elevation, azimuth and a dolly zoom (2° → 50° FOV at constant screen size); heights scaled by the blend | [camera_rig.cpp](src/editor/camera_rig.cpp) | The animated switch between plan and 3D |
-| Orbit, pan, zoom | Spherical coordinates; pan and zoom keep the floor point under the mouse fixed | [camera_rig.cpp](src/editor/camera_rig.cpp), [app.cpp](app/app.cpp) | 3D camera controls |
+| Orbit, pan, zoom | Spherical coordinates; stepped turns glide by exponential smoothing `1 − e^(−k·dt)` (frame-rate independent); pan and zoom keep the floor point under the mouse fixed | [camera_rig.cpp](src/editor/camera_rig.cpp), [app.cpp](app/app.cpp) | Rotating, zooming and panning the 3D view |
 | Ray picking | Pixel → NDC → ray; ray vs prism (caps by point-in-polygon, sides by segment intersection), nearest hit | [picking.cpp](src/editor/picking.cpp) | Clicking and dragging pieces in 3D |
 | Lighting | Blinn–Phong: ambient + directional sun + point lamp with distance attenuation | [renderer.cpp](src/gfx/renderer.cpp) | Shaded 3D view, day/evening/night |
 | Shadows | Planar projection matrix onto the floor + stencil buffer (each pixel darkened once) | [renderer.cpp](src/gfx/renderer.cpp) | Furniture shadows from the sun |
@@ -403,12 +408,14 @@ All 26 passed on the tested Linux machine.
 
 The app itself needs a display, so it is not part of the default test run.
 Configure with `-DROOMCRAFT_TEST_APP=ON` to add `roomcraft_app_capture`: it
-runs the scripted tour in a hidden window and checks six real interactions
+runs the scripted tour in a hidden window and checks real interactions
 (injected mouse and keyboard events): a click selects the piece under it, a
 100-pixel drag moves it by the matching distance, Ctrl+Z undoes the whole drag
 in one step, Tab completes the 2D-to-3D transition, a right-drag orbits by the
-expected angle, and the wheel zooms by the expected factor. It passed on the
-tested Linux machine.
+expected angle, the wheel zooms by the expected factor, a left-drag on empty
+floor rotates the view without moving any furniture, Q turns the view by
+exactly 15°, the corner rotate control is shown and auto-rotate turns at its
+set speed. It passed on the tested Linux machine.
 
 ### Checkpoint 1 tests
 
@@ -446,10 +453,10 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 | `test_triangulate` | 1,102 | Ear clipping gives n − 2 triangles with the polygon's winding, exact total area and no triangle outside, for every catalogue shape, combs, stars, 300 random concave polygons, both windings, transformed shapes and degenerate input; overlap areas of convex and concave pairs |
 | `test_layout` | 790 | Catalogue ids, centring, parts inside footprints and heights; item footprints; the sample and example layouts fit with no collisions; 3D-aware collisions (a chair under a table top is fine, its backrest is not); wall clamping; door/window placement; save/load round trip, Windows line endings, unknown types and invalid files |
 | `test_mesh` | 387 | Every triangle counter-clockwise from its normal's side; unit normals; outward side normals for both windings; triangle counts; every model inside its footprint and as tall as its type; walls, cut walls, openings, floor, grid and door swing |
-| `test_camera_picking` | 147 | Plan camera orientation and scale; project → ray round trip at 21 transition stages and 3 aspect ratios; easing midpoint; dolly zoom keeps screen size; orbit limits; framing; ray vs prism for caps, sides, concave notches and floating parts; nearest-piece picking; plan picking agrees with the CP1 `findFurnitureAt` |
+| `test_camera_picking` | 163 | Plan camera orientation and scale; project → ray round trip at 21 transition stages and 3 aspect ratios; easing midpoint; dolly zoom keeps screen size; orbit limits; stepped turns glide and add up at any frame rate; reset the short way round; auto-rotate; framing; ray vs prism for caps, sides, concave notches and floating parts; nearest-piece picking; plan picking agrees with the CP1 `findFurnitureAt` |
 | `test_editor` | 79 | Adding to the nearest free spot; selection; rotation steps and wrap; duplicate; nudging stopped at walls; drag with grid snap and wall clamping; a drag is one undo step and a click is none; inspector gestures; undo/redo of room and layout changes; checks cache; save/open |
 
-The five CP3 unit tests contain 2,505 checks.
+The five CP3 unit tests contain 2,521 checks.
 
 ---
 

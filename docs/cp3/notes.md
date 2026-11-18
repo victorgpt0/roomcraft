@@ -14,7 +14,7 @@ cmake --build build -j
 ```
 
 `./build/roomcraft_app --capture demo_output/cp3` runs a scripted tour in a
-hidden window, saves the screenshots and GIF used below, and checks six real
+hidden window, saves the screenshots and GIF used below, and checks real
 mouse/keyboard interactions (it exits with code 1 if any fails).
 
 | Image | Shows |
@@ -38,7 +38,7 @@ mouse/keyboard interactions (it exits with code 1 if any fails).
 | Rectangular room with adjustable dimensions | **Done** | Width, depth and wall height in the Room tab; the door and window follow the walls. |
 | Real-time 2D-to-3D conversion | **Done** | One layout, two views. Every edit shows immediately in both; Tab switches with an animated transition. |
 | Basic 3D furniture as simple shapes | **Done, extended** | 18 catalogue types, each a multi-part model (a bed is a base, mattress, duvet, headboard and pillows) built by extruding plan polygons. |
-| 3D camera: orbit, zoom, pan | **Done** | Right-drag orbits (spherical coordinates), wheel zooms towards the mouse, middle-drag pans. |
+| 3D camera: orbit, zoom, pan | **Done** | Rotate by dragging empty floor or right-dragging, with Q/E or the arrow keys, with the corner buttons, or with auto-rotate (spherical coordinates). The wheel zooms towards the mouse; middle-drag pans. |
 | Ambient + directional/point light, Phong-style shading | **Done** | Blinn–Phong in our fragment shader: ambient, a sun (directional) and a ceiling lamp (point light with attenuation). Day/Evening/Night presets. |
 | Colour selection for walls and furniture | **Done** | Colour pickers for every piece, the floor and the walls. |
 | Scene graph room → walls → furniture | **Done, simplified** | Room → piece (pose) → parts. Each part's world placement is the piece's pose matrix applied to the part's local polygon. |
@@ -191,9 +191,29 @@ twice. That is why an edit in either view shows instantly in the other.
 3. **Component:** selection, hover highlight, dragging, zoom-to-cursor, pan.
 4. **Achieves:** click on what you see, in 2D, in 3D and during the
    transition; tall pieces hide what is behind them.
-5. **Show:** hover and click pieces in 3D. Tests: `test_camera_picking` (147
+5. **Show:** hover and click pieces in 3D. Tests: `test_camera_picking` (163
    checks, including a round trip — project a point, cast the ray back, the
    point lies on it — at 21 transition stages and 3 aspect ratios).
+
+### 6b. Rotating the 3D view
+
+1. **What?** Orbiting the camera round the room on a sphere (azimuth = turn,
+   elevation = tilt), with smooth stepped turns and a turntable mode.
+2. **How?** `CameraRig::orbit` (mouse drags: immediate, 0.3°/pixel),
+   `orbitBy` (keys and buttons: adds to a goal angle) and `update`, which moves
+   the camera a fixed fraction `1 − e^(−14·dt)` of the remaining way each frame
+   — exponential smoothing, the same speed at any frame rate; steps added while
+   gliding just extend the motion. Elevation is clamped to 8°–89° (never under
+   the floor, never straight down where "up" is undefined). `autoRotate` adds
+   `speed · dt` each frame. In the app, a left press on empty floor becomes an
+   orbit once the mouse moves more than 4 pixels; otherwise it is a click that
+   deselects.
+3. **Component:** the 3D camera; the corner control, Q/E, arrow keys, View tab.
+4. **Achieves:** the proposal's orbit control, usable without a right mouse
+   button (touchpads) and discoverable on screen.
+5. **Show:** drag empty floor in 3D; hold the corner arrow; tick Auto-rotate.
+   Tests: `test_camera_picking` (glide, accumulation, frame-rate independence,
+   clamping, reset the short way round, auto-rotate) and the capture checks.
 
 ### 7. Interaction: drag on a plane, snapping, clamping, undo
 
@@ -302,6 +322,12 @@ solved.
 - **Proving the interaction works without a person at the mouse.** The
   scripted capture injects real mouse/keyboard events into ImGui's input
   queue and checks the results (drag distance, undo, Tab, orbit angle, zoom).
+- **Rotating the 3D view was hard to discover.** It needed a right-button
+  drag, which nothing on screen mentioned and which is awkward on a touchpad.
+  Added left-drag on empty floor, keys, a corner control and auto-rotate. The
+  first version of the left-drag turned too far: when a press became a drag,
+  the movement of that frame was applied twice. The capture check (a
+  120-pixel drag must turn exactly 36°) failed and caught it.
 - **UI that did not fit.** The first panel layout ran off the bottom of the
   window and a two-column catalogue truncated the names; replaced by tabs.
 
