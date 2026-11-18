@@ -86,3 +86,6 @@ foreach(cp2_part transform output scene view anim showcase)
         include(${CMAKE_SOURCE_DIR}/cmake/cp2_${cp2_part}.cmake)
     endif()
 endforeach()
+
+# --- Checkpoint 3: OpenGL integration, see cmake/cp3_app.cmake ---------------
+include(${CMAKE_SOURCE_DIR}/cmake/cp3_app.cmake)

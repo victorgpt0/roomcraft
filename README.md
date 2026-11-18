@@ -1,9 +1,20 @@
 # RoomCraft
 
 **RoomCraft** is a 2D-to-3D interior layout visualiser. Users lay out a room and
-its furniture on a top-down 2D grid and will later view the result in 3D.
-Checkpoint 2 adds matrices, cameras, a scene graph, animations and a from-scratch
-GIF encoder; the floor plan is still the single source of truth.
+its furniture on a top-down 2D plan and see the same room, lit, in 3D.
+Checkpoint 3 is an interactive OpenGL app: drag furniture on the plan, press
+Tab, and the room rises into a 3D view you can orbit. It is built on the
+algorithms of Checkpoints 1 and 2 (polygons, clipping, matrices, cameras,
+easing, GIF encoding); the floor plan is still the single source of truth.
+
+![RoomCraft Checkpoint 3: plan, transition to 3D, orbit and back](docs/images/cp3/cp3_tour.gif)
+
+*`cp3_tour.gif`, recorded by the app itself: the 2D plan turns into the lit 3D
+room, the camera orbits, and the view returns to the plan.*
+
+| 2D plan (OpenGL) | 3D view |
+|---|---|
+| ![The OpenGL 2D plan with the L-sofa selected](docs/images/cp3/cp3_plan.png) | ![The 3D view with lighting, floor shadows and cutaway walls](docs/images/cp3/cp3_3d.png) |
 
 ![RoomCraft Checkpoint 2 integration showcase](docs/images/cp2/showcase.gif)
 
@@ -33,11 +44,15 @@ the plan is extruded into a 3D orbit reveal.*
 
 | | |
 |---|---|
-| Language | C++17 (standard library only) |
+| Language | C++17. The CP1/CP2 libraries use the standard library only |
+| Graphics API (CP3) | OpenGL 3.3 core profile, GLSL 330 shaders |
+| Window and input (CP3) | [GLFW 3.4](https://www.glfw.org/), downloaded by CMake |
+| User interface (CP3) | [Dear ImGui 1.91.9b](https://github.com/ocornut/imgui), downloaded by CMake |
+| OpenGL loader (CP3) | [glad 0.1.36](https://github.com/Dav1dde/glad), generated code in `third_party/glad` |
 | Build system | CMake ≥ 3.20 |
 | Tests | CTest, with a small assertion helper ([tests/test_helpers.h](tests/test_helpers.h)) |
 | Output | Binary PPM (P6), 24-bit BMP, GIF89a animations and bitmap text, written by our own code |
-| Tested with | GCC 13.3.0 + CMake 3.28.3 on Pop!_OS 24.04 (Linux); also GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11 in earlier CP2 work |
+| Tested with | GCC 13.3.0 + CMake 3.28.3 on Pop!_OS 24.04 (Linux), Mesa radeonsi, OpenGL 4.6; also GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11 in earlier CP2 work |
 | Version control | Git / GitHub |
 
 ---
@@ -133,17 +148,108 @@ timeline.
 
 ---
 
+## Checkpoint 3: OpenGL integration and the interactive prototype
+
+`roomcraft_app` is a desktop app: Dear ImGui panels around a room drawn by
+OpenGL. Everything the proposal listed for the editor and the 3D view works
+in it. The math is our own: the CP2 `view::Mat4`, `lookAt`, projections and
+orbit camera drive the GPU through our GLSL shaders (no GLM, no engine).
+
+**What you can do**
+
+- **Furniture:** add from a catalogue of 18 types, each a multi-part 3D model.
+- **Arrange:** select, drag (snaps to a 10 cm grid, stops at the walls),
+  rotate, scale, mirror, recolour, duplicate and delete, with undo/redo.
+- **Room:** change its width, depth and wall height, and the floor and wall
+  colours.
+- **2D ↔ 3D:** switch with Tab. An animated transition grows the furniture out
+  of the plan. In 3D, rotate the view (drag empty floor, right-drag, Q/E, the
+  corner buttons or auto-rotate), zoom towards the mouse and pan; walls
+  between the camera and the room are cut away.
+- **Lighting:** a sun (directional) and a ceiling lamp (point light) with
+  Blinn–Phong shading, floor shadows, and Day/Evening/Night presets.
+- **Checks:** pieces through a wall turn red, colliding pieces amber; the
+  *Layout checks* list shows every problem.
+- **Files:** save and open layouts as text files (two examples in `layouts/`),
+  save BMP screenshots (F12) and record GIFs with our CP2 encoder.
+- **Comparison:** a *Software renderer* panel draws the same layout with the
+  CP1/CP2 CPU rasterizer, next to the OpenGL view.
+
+| Evening light and the lamp | Layout checks | CP1/CP2 software renderer panel |
+|---|---|---|
+| ![Evening preset](docs/images/cp3/cp3_evening.png) | ![A wardrobe through the wall in red, a collision in amber](docs/images/cp3/cp3_checks.png) | ![The software rasterizer panel](docs/images/cp3/cp3_software.png) |
+
+**Controls**
+
+| Input | Action |
+|---|---|
+| Left click / drag | Select / move a piece (click empty floor to deselect) |
+| Left drag on empty floor (3D) | Rotate the view |
+| Right drag | 3D: rotate the view · 2D: pan |
+| Q / E, Page Up / Page Down | Turn the 3D view left / right, look from higher / lower |
+| Arrow keys, nothing selected | Turn and tilt the 3D view |
+| Corner buttons in the view | Rotate, reset the angle, auto-rotate (turntable) |
+| Middle drag | Pan |
+| Wheel / Shift+wheel | Zoom towards the mouse / rotate the selected piece |
+| R, Shift+R | Rotate ±15° |
+| Arrow keys with a piece selected (Shift) | Nudge it by one grid step (1 cm) |
+| Del, Ctrl+D | Delete, duplicate |
+| Ctrl+Z, Ctrl+Y | Undo, redo |
+| Tab, F, G | 2D/3D, frame the room, snap on/off |
+| Ctrl+S, Ctrl+O, F12, F1 | Save, open, screenshot, help |
+
+| Technique | Algorithm | Source file | RoomCraft use |
+|---|---|---|---|
+| GPU rendering pipeline | Vertex/index buffers (VBO/EBO/VAO), GLSL vertex and fragment shaders, depth buffer, 4× MSAA | [gpu_mesh.cpp](src/gfx/gpu_mesh.cpp), [shader.cpp](src/gfx/shader.cpp), [renderer.cpp](src/gfx/renderer.cpp) | Drawing the room at 60 fps |
+| Our matrices on the GPU | CP2 `lookAt` + perspective/orthographic, uploaded row-major with `transpose = GL_TRUE` | [camera_rig.cpp](src/editor/camera_rig.cpp), [shader.cpp](src/gfx/shader.cpp) | Camera and model transforms |
+| Polygon triangulation | Ear clipping (n − 2 triangles, either winding, concave shapes) | [triangulate.cpp](src/editor/triangulate.cpp) | Floor, plan footprints and the top of every 3D part |
+| Extrusion to lit meshes | Prism sides with outward normals `(dy, −dx)`, CCW front faces, triangulated caps | [mesh.cpp](src/editor/mesh.cpp) | Furniture parts, walls with door/window openings |
+| Hierarchical models | Room → piece (pose matrix) → parts (local polygons + height ranges) | [catalogue.cpp](src/editor/catalogue.cpp), [mesh.cpp](src/editor/mesh.cpp) | 18 multi-part furniture models |
+| 2D ↔ 3D transition | Eased blend of elevation, azimuth and a dolly zoom (2° → 50° FOV at constant screen size); heights scaled by the blend | [camera_rig.cpp](src/editor/camera_rig.cpp) | The animated switch between plan and 3D |
+| Orbit, pan, zoom | Spherical coordinates; stepped turns glide by exponential smoothing `1 − e^(−k·dt)` (frame-rate independent); pan and zoom keep the floor point under the mouse fixed | [camera_rig.cpp](src/editor/camera_rig.cpp), [app.cpp](app/app.cpp) | Rotating, zooming and panning the 3D view |
+| Ray picking | Pixel → NDC → ray; ray vs prism (caps by point-in-polygon, sides by segment intersection), nearest hit | [picking.cpp](src/editor/picking.cpp) | Clicking and dragging pieces in 3D |
+| Lighting | Blinn–Phong: ambient + directional sun + point lamp with distance attenuation | [renderer.cpp](src/gfx/renderer.cpp) | Shaded 3D view, day/evening/night |
+| Shadows | Planar projection matrix onto the floor + stencil buffer (each pixel darkened once) | [renderer.cpp](src/gfx/renderer.cpp) | Furniture shadows from the sun |
+| Cutaway walls | Object-level back-face test `(eye − centre) · n > 0` | [renderer.cpp](src/gfx/renderer.cpp) | Seeing into the room from any angle |
+| Collision check | Triangulate both footprints, clip triangle pairs with Sutherland–Hodgman, only for parts whose heights overlap | [triangulate.cpp](src/editor/triangulate.cpp), [layout.cpp](src/editor/layout.cpp) | Amber warnings; free spot for new pieces |
+| Undo/redo | Layout snapshots; a drag or slider movement is one gesture | [editor.cpp](src/editor/editor.cpp) | Every edit |
+| Framebuffer capture | `glReadPixels` → CP1 `Canvas` (BMP); box filter + 4×4 Bayer ordered dither to 252 colours → CP2 GIF encoder | [capture.cpp](app/capture.cpp) | Screenshots and GIF recordings |
+| Software comparison view | CP1 scanline fill, Bresenham, clipping + CP2 `Camera2D` and bitmap font, shown as a texture | [software_view.cpp](app/software_view.cpp) | The same layout drawn on the CPU |
+
+The editing logic (`src/editor`) has no OpenGL in it and is tested by CTest;
+`src/gfx` and `app/` are the OpenGL and UI layers on top. The presenter notes
+for the video, with the five questions for every technique, are in
+[docs/cp3/notes.md](docs/cp3/notes.md).
+
+---
+
 ## How to compile and run
 
 The build produces the libraries `raster`, `roomcraft`, `xform`, `output`,
-`scene`, `view` and `anim`; 14 unit-test executables; `roomcraft_demo`; and
-the six Checkpoint 2 demo executables.
+`scene`, `view`, `anim` and `editor`; 19 unit-test executables;
+`roomcraft_demo`; the six Checkpoint 2 demo executables; and the Checkpoint 3
+app `roomcraft_app`.
+
+The **first configure downloads GLFW and Dear ImGui** from GitHub (CMake
+`FetchContent`), so it needs an internet connection. To build only the
+libraries, tests and demos (no window, no download), add
+`-DROOMCRAFT_BUILD_APP=OFF` to the configure command.
+
+**Run the app from the repository root**, so that it finds the example
+layouts and saves into `my_layouts/`, `screenshots/` and `recordings/` there.
 
 ### Linux - Pop!_OS 24.04
 
 The commands below were run on Pop!_OS 24.04 with GCC 13.3.0, CMake 3.28.3
-and Unix Makefiles. A clean configure and build produced no warnings with
-`-Wall -Wextra -Wpedantic`.
+and Unix Makefiles. A clean configure and build produced no warnings from our
+code with `-Wall -Wextra -Wpedantic`.
+
+The app needs the X11 and OpenGL development headers for GLFW (Debian, Ubuntu,
+Pop!_OS package names):
+
+```sh
+sudo apt install libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev
+```
 
 ```sh
 cmake -S . -B build
@@ -156,6 +262,8 @@ ctest --test-dir build --output-on-failure
 ./build/cp2_view_demo
 ./build/cp2_anim_demo
 ./build/cp2_showcase demo_output/cp2
+./build/roomcraft_app                                  # the interactive app
+./build/roomcraft_app --capture demo_output/cp3        # scripted tour: screenshots, GIF, interaction checks
 ```
 
 ### Windows - MSYS2 / MinGW 
@@ -176,14 +284,18 @@ cmake --build build                             # build
 ctest --test-dir build --output-on-failure      # run all tests
 .\build\roomcraft_demo.exe                      # write the CP1 images
 .\build\cp2_showcase.exe demo_output\cp2        # write the CP2 GIFs
+.\build\roomcraft_app.exe                       # the interactive app
 ```
 
 The team previously built and ran this setup with GCC 15.2 on Windows 11.
+**The CP3 app has not been built on Windows yet.** GLFW and ImGui are
+downloaded and built by CMake, so no extra packages should be needed, and the
+app is linked statically so the `.exe` starts without MSYS2's DLLs.
 
 ### Windows - Visual Studio 2022
 
 The **"Desktop development with C++"** workload must be installed (Visual
-Studio Installer → Modify). This path was not re-tested for Checkpoint 2.
+Studio Installer → Modify). This path was not tested for Checkpoints 2 and 3.
 
 - **From the IDE:** *File → Open → Folder…* and pick the project folder.
   Visual Studio detects `CMakeLists.txt`. Build with *Build → Build All*, run
@@ -196,12 +308,14 @@ Studio Installer → Modify). This path was not re-tested for Checkpoint 2.
   cmake --build build-vs --config Release
   ctest --test-dir build-vs -C Release --output-on-failure
   .\build-vs\Release\cp2_showcase.exe demo_output\cp2
+  .\build-vs\Release\roomcraft_app.exe
   ```
 
 ### macOS
 
-The Linux commands should also work with Clang and CMake ≥ 3.20, but macOS was
-not tested for this project.
+The Linux commands should also work with Clang and CMake ≥ 3.20 (the app asks
+for an OpenGL 3.3 forward-compatible core context on macOS), but macOS was not
+tested for this project.
 
 ### Running a single test
 
@@ -229,6 +343,8 @@ files. The best results are copied to `docs/images/cp2/` for this README.
 | `cp2_view_demo` | `demo_output/cp2/` | `view_zoom.gif`, `view_minimap.gif`, `view_orbit.gif`, `view_projection.gif`, `view_reveal.gif` |
 | `cp2_anim_demo` | `demo_output/cp2/` | `anim_easing.gif`, `anim_arrange.gif`, `anim_collision.gif`, `anim_vacuum.gif` |
 | `cp2_showcase` | `demo_output/cp2/` (or a folder given as the first argument) | `showcase.gif` plus `showcase_1_door.gif` … `showcase_6_reveal.gif` |
+| `roomcraft_app --capture <folder>` | the folder given | `cp3_plan`, `cp3_transition`, `cp3_3d`, `cp3_evening`, `cp3_checks`, `cp3_software` (`.bmp`) and `cp3_tour.gif` |
+| `roomcraft_app` (F12, File → Record GIF, Ctrl+S) | `screenshots/`, `recordings/`, `my_layouts/` | Screenshots, GIF recordings and saved layouts (all git-ignored) |
 | `test_*` | `tests/output/` | one image per test, `.bmp` and `.ppm` |
 
 - **`.bmp`** opens directly in Windows Photos, macOS Preview and most image
@@ -278,15 +394,28 @@ The Checkpoint 1 previews are PNG copies of the demo's BMP files, converted
 with Windows' built-in image tools. The CP2 transform and font previews are
 PNG copies of the BMP output, converted with ImageMagick as recorded in the
 notes; every CP2 GIF in `docs/images/cp2/` is written by the program itself and
-committed unmodified. The program writes BMP, PPM and GIF.
+committed unmodified. The CP3 screenshots in `docs/images/cp3/` are PNG copies
+of the app's BMP screenshots (ImageMagick); `cp3_tour.gif` is the app's own
+recording, unmodified. The programs write BMP, PPM and GIF.
 
 ---
 
 ## Testing
 
-Every test checks real properties, not just that the code runs. CTest runs 21
-tests: 14 unit-test executables, `roomcraft_demo`, and the six CP2 demos.
-All 21 passed on the tested Linux machine.
+Every test checks real properties, not just that the code runs. CTest runs 26
+tests: 19 unit-test executables, `roomcraft_demo`, and the six CP2 demos.
+All 26 passed on the tested Linux machine.
+
+The app itself needs a display, so it is not part of the default test run.
+Configure with `-DROOMCRAFT_TEST_APP=ON` to add `roomcraft_app_capture`: it
+runs the scripted tour in a hidden window and checks real interactions
+(injected mouse and keyboard events): a click selects the piece under it, a
+100-pixel drag moves it by the matching distance, Ctrl+Z undoes the whole drag
+in one step, Tab completes the 2D-to-3D transition, a right-drag orbits by the
+expected angle, the wheel zooms by the expected factor, a left-drag on empty
+floor rotates the view without moving any furniture, Q turns the view by
+exactly 15°, the corner rotate control is shown and auto-rotate turns at its
+set speed. It passed on the tested Linux machine.
 
 ### Checkpoint 1 tests
 
@@ -317,6 +446,18 @@ All 21 passed on the tested Linux machine.
 The seven CP2 unit tests contain 9,652 checks. These counts are the summaries
 printed by the current executables (`test_*: N checks, 0 failed`).
 
+### Checkpoint 3 tests
+
+| Test | Checks | What it verifies |
+|---|---|---|
+| `test_triangulate` | 1,102 | Ear clipping gives n − 2 triangles with the polygon's winding, exact total area and no triangle outside, for every catalogue shape, combs, stars, 300 random concave polygons, both windings, transformed shapes and degenerate input; overlap areas of convex and concave pairs |
+| `test_layout` | 790 | Catalogue ids, centring, parts inside footprints and heights; item footprints; the sample and example layouts fit with no collisions; 3D-aware collisions (a chair under a table top is fine, its backrest is not); wall clamping; door/window placement; save/load round trip, Windows line endings, unknown types and invalid files |
+| `test_mesh` | 387 | Every triangle counter-clockwise from its normal's side; unit normals; outward side normals for both windings; triangle counts; every model inside its footprint and as tall as its type; walls, cut walls, openings, floor, grid and door swing |
+| `test_camera_picking` | 163 | Plan camera orientation and scale; project → ray round trip at 21 transition stages and 3 aspect ratios; easing midpoint; dolly zoom keeps screen size; orbit limits; stepped turns glide and add up at any frame rate; reset the short way round; auto-rotate; framing; ray vs prism for caps, sides, concave notches and floating parts; nearest-piece picking; plan picking agrees with the CP1 `findFurnitureAt` |
+| `test_editor` | 79 | Adding to the nearest free spot; selection; rotation steps and wrap; duplicate; nudging stopped at walls; drag with grid snap and wall clamping; a drag is one undo step and a click is none; inspector gestures; undo/redo of room and layout changes; checks cache; save/open |
+
+The five CP3 unit tests contain 2,521 checks.
+
 ---
 
 ## Current progress
@@ -343,10 +484,20 @@ printed by the current executables (`test_*: N checks, 0 failed`).
 - [x] Six-scene integration showcase, per-scene GIFs and presenter notes
 - [x] CP2 tests and README
 
-**Next: Checkpoint 3 - OpenGL integration.** The plan is to replace the
-software preview path with real-time OpenGL rendering, then add the interactive
-editor that CP2 deliberately left out. Lighting and colour pickers are
-deferred until that editor exists.
+**Checkpoint 3 - OpenGL integration and prototype: complete.**
+
+- [x] OpenGL 3.3 core renderer with our own GLSL shaders and CP2 matrices
+- [x] Interactive 2D plan editor: select, drag, snap, rotate, scale, mirror, recolour, undo/redo
+- [x] Real-time 3D view with orbit, zoom and pan, and an animated 2D ↔ 3D transition
+- [x] Multi-part furniture models (18 types), walls with a door and a window
+- [x] Blinn–Phong lighting (sun + lamp), floor shadows, cutaway walls
+- [x] Fit and collision checks shown live; room size and colours adjustable
+- [x] Save/open layouts; screenshots and GIF recording through our CP1/CP2 code
+- [x] CP3 tests, scripted capture with interaction checks, presenter notes
+
+**Next: the final project.** Test the Windows build with the team, add drag
+from the palette, shadow mapping, textures, user-placed doors and windows, and
+non-rectangular rooms (see [docs/cp3/notes.md](docs/cp3/notes.md)).
 
 ---
 
@@ -373,11 +524,9 @@ deferred until that editor exists.
 - **Ellipses are axis-aligned only.** Rotated ellipses are not supported.
 - **Round furniture** uses a many-sided polygon footprint for hit testing and
   fit checks, while it is drawn with the exact midpoint circle.
-- **No interactive editor yet.** CP2 animations are scripted; selecting,
-  dragging and editing in real time waits for the CP3 OpenGL layer. There is
-  no lighting or colour picker yet either.
 
-**3D viewing**
+**3D viewing in the CP2 software path** (the CP3 app uses OpenGL with a depth
+buffer instead)
 
 - **Wireframes only:** there is no hidden-line removal, so edges behind
   furniture remain visible.
@@ -406,9 +555,26 @@ deferred until that editor exists.
   thousandths of a pixel, but very long accumulated products will drift;
   rebuilding from a pose each frame avoids this.
 
+**The CP3 app**
+
+- **Shadows fall only on the floor**, from the sun only; walls and the lamp
+  cast none, and furniture does not shadow other furniture.
+- **Furniture models are prisms** (extruded polygons): no textures and no
+  shapes that curve in height.
+- **The room is a rectangle** with one door and one window in fixed places.
+- **New pieces are added by clicking in the palette** (at the centre of the
+  view), not by dragging them in.
+- **Labels in 3D are drawn on top** and are not hidden behind furniture.
+- **GIF recordings are dithered to 252 colours** (fine patterns are visible
+  close up) and stop after 30 seconds.
+- **The first configure needs internet access** to download GLFW and Dear
+  ImGui.
+
 **Platform testing**
 
 - Tested for this README with GCC 13.3.0, CMake 3.28.3 and Unix Makefiles on
   Pop!_OS 24.04 (Linux).
 - The team previously tested GCC 15.2 (MSYS2 UCRT64) + Ninja on Windows 11.
   MSVC (`/W4`), Clang and macOS were not tested for CP2.
+- The CP3 app was tested only on Linux (Mesa radeonsi, OpenGL 4.6). It has
+  not yet been built on Windows or macOS.
