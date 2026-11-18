@@ -1,0 +1,19 @@
+roomcraft-layout 1
+# A studio flat: sleeping, dining, living and a work corner in one room.
+# Format: item <type> <x> <y> <angle> <scaleX> <scaleY> <heightScale> <r g b> <name>
+room 700.00 500.00 270.00 205 178 140 240 236 228
+item bed_double 100.00 120.00 0.00 1.00 1.00 1.00 120 140 175 Double bed
+item nightstand 205.00 30.00 0.00 1.00 1.00 1.00 181 136 99 Nightstand
+item wardrobe 30.00 300.00 90.00 1.00 1.00 1.00 181 136 99 Wardrobe
+item rug 480.00 210.00 0.00 1.00 1.00 1.00 70 110 150 Rug
+item sofa 480.00 60.00 0.00 1.00 1.00 1.00 150 120 95 Sofa
+item coffee_table 480.00 210.00 0.00 1.00 1.00 1.00 150 110 80 Coffee table
+item armchair 640.00 210.00 270.00 1.00 1.00 1.00 120 150 110 Reading chair
+item tv_unit 480.00 478.00 180.00 1.00 1.00 1.00 60 60 66 TV unit
+item table_round 220.00 330.00 0.00 1.00 1.00 1.00 181 136 99 Dining table
+item chair 220.00 255.00 180.00 1.00 1.00 1.00 96 125 160 Chair
+item chair 145.00 330.00 90.00 1.00 1.00 1.00 96 125 160 Chair
+item desk 300.00 450.00 180.00 1.00 1.00 1.00 200 200 195 Desk
+item office_chair 300.00 390.00 180.00 1.00 1.00 1.00 50 55 65 Desk chair
+item plant 670.00 470.00 0.00 1.00 1.00 1.00 70 140 70 Plant
+item floor_lamp 670.00 30.00 0.00 1.00 1.00 1.00 230 215 170 Floor lamp
