@@ -269,28 +269,34 @@ ctest --test-dir build --output-on-failure
 ### Windows - MSYS2 / MinGW 
 
 Install [MSYS2](https://www.msys2.org/), then in an MSYS2 UCRT64 shell install
-the tools:
+the tools. `git` is needed from Checkpoint 3 on: the first configure uses it
+to download GLFW and Dear ImGui.
 
 ```sh
-pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja git
 ```
 
-Then, in PowerShell from the project folder:
+Then, in PowerShell from the project folder (the first configure needs an
+internet connection):
 
 ```powershell
-$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"   # once per terminal
+$env:PATH = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:PATH"   # once per terminal (usr\bin has git)
 cmake -S . -B build -G Ninja                    # configure (once)
 cmake --build build                             # build
 ctest --test-dir build --output-on-failure      # run all tests
 .\build\roomcraft_demo.exe                      # write the CP1 images
 .\build\cp2_showcase.exe demo_output\cp2        # write the CP2 GIFs
 .\build\roomcraft_app.exe                       # the interactive app
+.\build\roomcraft_app.exe --capture demo_output\cp3   # self-test: prints PASS/FAIL per interaction check
 ```
 
+Run the app from the project folder: saved layouts, screenshots and GIF
+recordings go into `my_layouts\`, `screenshots\` and `recordings\` there. The
+app is linked statically, so the `.exe` also starts by double-clicking it in
+Explorer, without the MSYS2 folders on the PATH.
+
 The team previously built and ran this setup with GCC 15.2 on Windows 11.
-**The CP3 app has not been built on Windows yet.** GLFW and ImGui are
-downloaded and built by CMake, so no extra packages should be needed, and the
-app is linked statically so the `.exe` starts without MSYS2's DLLs.
+**The CP3 app has not been built on Windows yet.**
 
 ### Windows - Visual Studio 2022
 
@@ -298,9 +304,13 @@ The **"Desktop development with C++"** workload must be installed (Visual
 Studio Installer → Modify). This path was not tested for Checkpoints 2 and 3.
 
 - **From the IDE:** *File → Open → Folder…* and pick the project folder.
-  Visual Studio detects `CMakeLists.txt`. Build with *Build → Build All*, run
-  the tests from the *Test Explorer*, and choose `roomcraft_demo.exe` as the
-  startup item to run the CP1 demo.
+  Visual Studio detects `CMakeLists.txt` (the first time, CMake downloads
+  GLFW and Dear ImGui). Build with *Build → Build All*, run the tests from
+  the *Test Explorer*, and choose `roomcraft_app.exe` as the startup item and
+  press F5 to run the app (or `roomcraft_demo.exe` for the CP1 demo). The
+  example layouts are found from anywhere; your own saves, screenshots and
+  recordings go into the folder Visual Studio runs the program from, usually
+  the build folder.
 - **From a "Developer PowerShell for VS 2022":**
 
   ```powershell
@@ -310,6 +320,20 @@ Studio Installer → Modify). This path was not tested for Checkpoints 2 and 3.
   .\build-vs\Release\cp2_showcase.exe demo_output\cp2
   .\build-vs\Release\roomcraft_app.exe
   ```
+
+### If the app does not start
+
+- **"Could not create an OpenGL 3.3 window"** (printed in the terminal): the
+  computer needs a real graphics driver with OpenGL 3.3. Virtual machines and
+  Windows' "Microsoft Basic Display Adapter" only offer OpenGL 1.1; install
+  or update the Intel, AMD or NVIDIA driver. On Linux, check
+  `glxinfo -B` (package `mesa-utils`).
+- **The first configure fails while downloading GLFW or ImGui:** check that
+  `git --version` works in the same terminal and that you are online. To
+  build everything except the app, configure with `-DROOMCRAFT_BUILD_APP=OFF`.
+- **The example layouts are missing from File → Open:** they are read from the
+  `layouts` folder of the project the app was built from; rebuild if the
+  project folder was moved.
 
 ### macOS
 
