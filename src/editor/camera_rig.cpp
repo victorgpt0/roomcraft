@@ -20,6 +20,35 @@ float radians(float degrees) {
 } // namespace
 
 void CameraRig::update(float dt) {
+    // Turntable: only in the finished 3D view, so it never fights the
+    // transition.
+    if (autoRotate && blend >= 1.0f && blendTarget >= 1.0f) {
+        orbitGliding = false;
+        azimuth3D += autoRotateSpeed * dt;
+    }
+
+    // Stepped orbit: move a fixed FRACTION of the remaining way each frame
+    // (exponential smoothing). Fast at first, slowing as it arrives, and a
+    // new step added on the way just extends the motion. The factor
+    // 1 - e^(-k dt) makes the speed the same at any frame rate.
+    if (orbitGliding) {
+        const float follow = 1.0f - std::exp(-14.0f * dt);
+        azimuth3D += (azimuthGoal - azimuth3D) * follow;
+        elevation3D += (elevationGoal - elevation3D) * follow;
+        if (std::fabs(azimuthGoal - azimuth3D) < 0.01f && std::fabs(elevationGoal - elevation3D) < 0.01f) {
+            azimuth3D = azimuthGoal;
+            elevation3D = elevationGoal;
+            orbitGliding = false;
+        }
+    }
+    // Keep the azimuth near 0..360 (it may run on with auto-rotate); the
+    // goal moves with it so a glide is not disturbed.
+    if (azimuth3D > 360.0f || azimuth3D < -360.0f) {
+        const float turns = std::floor(azimuth3D / 360.0f) * 360.0f;
+        azimuth3D -= turns;
+        azimuthGoal -= turns;
+    }
+
     // The blend moves at a constant rate; the EASING is applied when the
     // camera is built (state()), so a reversed transition mid-way stays
     // smooth.
@@ -63,9 +92,38 @@ void CameraRig::frameRoom(float width, float depth, float aspect, bool animate) 
 }
 
 void CameraRig::orbit(float dxPixels, float dyPixels) {
+    autoRotate = false;
+    orbitGliding = false;
     azimuth3D -= dxPixels * 0.3f;
     azimuth3D = std::fmod(azimuth3D, 360.0f);
-    elevation3D = std::clamp(elevation3D + dyPixels * 0.25f, 8.0f, 89.0f);
+    elevation3D = std::clamp(elevation3D + dyPixels * 0.25f, kMinElevation, kMaxElevation);
+    azimuthGoal = azimuth3D;
+    elevationGoal = elevation3D;
+}
+
+void CameraRig::orbitBy(float turnDegrees, float tiltDegrees) {
+    autoRotate = false;
+    if (!orbitGliding) {
+        azimuthGoal = azimuth3D;
+        elevationGoal = elevation3D;
+    }
+    azimuthGoal += turnDegrees;
+    elevationGoal = std::clamp(elevationGoal + tiltDegrees, kMinElevation, kMaxElevation);
+    orbitGliding = true;
+}
+
+void CameraRig::resetOrbit() {
+    autoRotate = false;
+    // Take the shorter way round to the default azimuth.
+    float delta = std::fmod(kDefaultAzimuth - azimuth3D, 360.0f);
+    if (delta > 180.0f) {
+        delta -= 360.0f;
+    } else if (delta < -180.0f) {
+        delta += 360.0f;
+    }
+    azimuthGoal = azimuth3D + delta;
+    elevationGoal = kDefaultElevation;
+    orbitGliding = true;
 }
 
 CameraState CameraRig::state(float aspect) const {

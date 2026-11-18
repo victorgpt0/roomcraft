@@ -168,6 +168,95 @@ void testTransition() {
     CHECK_NEAR(rig.target.x, 500, 1e-3);
 }
 
+void testOrbitControls() {
+    editor::CameraRig rig;
+    rig.blend = rig.blendTarget = 1.0f;
+    rig.azimuth3D = 30.0f;
+    rig.elevation3D = 38.0f;
+
+    // A step glides there: part of the way after one frame, all the way
+    // after a second, then it stops gliding.
+    rig.orbitBy(15.0f, 0.0f);
+    CHECK(rig.orbitGliding);
+    rig.update(1.0f / 60.0f);
+    CHECK(rig.azimuth3D > 30.0f && rig.azimuth3D < 45.0f);
+    for (int i = 0; i < 60; ++i) {
+        rig.update(1.0f / 60.0f);
+    }
+    CHECK_NEAR(rig.azimuth3D, 45.0, 0);
+    CHECK(!rig.orbitGliding);
+
+    // Steps given while still gliding add up (holding a key).
+    for (int i = 0; i < 4; ++i) {
+        rig.orbitBy(-15.0f, 5.0f);
+        rig.update(1.0f / 60.0f);
+    }
+    for (int i = 0; i < 120; ++i) {
+        rig.update(1.0f / 60.0f);
+    }
+    CHECK_NEAR(rig.azimuth3D, 45.0 - 60.0, 1e-3);
+    CHECK_NEAR(rig.elevation3D, 58.0, 1e-3);
+
+    // The same total time at a different frame rate gives the same result.
+    editor::CameraRig a, b;
+    a.orbitBy(90.0f, 0.0f);
+    b.orbitBy(90.0f, 0.0f);
+    for (int i = 0; i < 6; ++i) {
+        a.update(1.0f / 60.0f);
+    }
+    for (int i = 0; i < 3; ++i) {
+        b.update(1.0f / 30.0f);
+    }
+    CHECK_NEAR(a.azimuth3D, b.azimuth3D, 1e-3);
+
+    // Tilt is clamped: never under the floor, never straight down.
+    rig.orbitBy(0.0f, 500.0f);
+    for (int i = 0; i < 200; ++i) {
+        rig.update(1.0f / 60.0f);
+    }
+    CHECK_NEAR(rig.elevation3D, editor::CameraRig::kMaxElevation, 0);
+    rig.orbitBy(0.0f, -500.0f);
+    for (int i = 0; i < 200; ++i) {
+        rig.update(1.0f / 60.0f);
+    }
+    CHECK_NEAR(rig.elevation3D, editor::CameraRig::kMinElevation, 0);
+
+    // Reset takes the shorter way round: from 350 it turns +40 to 30, not -320.
+    rig.azimuth3D = 350.0f;
+    rig.orbitGliding = false;
+    rig.resetOrbit();
+    CHECK_NEAR(rig.azimuthGoal, 390.0, 1e-3);
+    for (int i = 0; i < 200; ++i) {
+        rig.update(1.0f / 60.0f);
+    }
+    CHECK_NEAR(rig.elevation3D, editor::CameraRig::kDefaultElevation, 1e-3);
+    CHECK_NEAR(std::fmod(rig.azimuth3D, 360.0f), 30.0, 1e-3);
+
+    // Auto-rotate turns at its speed in 3D, not during the transition or in
+    // the plan, and a drag turns it off.
+    rig.autoRotate = true;
+    rig.autoRotateSpeed = 20.0f;
+    const float before = rig.azimuth3D;
+    rig.update(0.5f);
+    CHECK_NEAR(rig.azimuth3D - before, 10.0, 1e-3);
+    rig.set3D(false);
+    rig.update(0.1f);
+    const float during = rig.azimuth3D;
+    rig.update(0.1f);
+    CHECK_NEAR(rig.azimuth3D, during, 0);
+    rig.set3D(true);
+    rig.update(10.0f);
+    rig.orbit(10.0f, 0.0f);
+    CHECK(!rig.autoRotate);
+
+    // Long auto-rotation keeps the angle bounded.
+    rig.autoRotate = true;
+    for (int i = 0; i < 1000; ++i) {
+        rig.update(1.0f);
+    }
+    CHECK(rig.azimuth3D >= -360.0f && rig.azimuth3D <= 360.0f);
+}
+
 void testRayHitPrism() {
     const raster::Polygon square = raster::makeRectangle(0, 0, 100, 100); // plan x 0..100, z 0..100
 
@@ -292,6 +381,7 @@ int main() {
     testPlanCamera();
     testRoundTripAllBlends();
     testTransition();
+    testOrbitControls();
     testRayHitPrism();
     testPickItem();
     return test::summary("test_camera_picking");

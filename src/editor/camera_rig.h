@@ -54,7 +54,7 @@ struct CameraState {
 struct CameraRig {
     xform::Vec3 target{280.0f, 0.0f, 210.0f};
     float viewHeight = 600.0f;     // zoom, cm of floor visible vertically
-    float azimuth3D = 30.0f;       // 3D orbit angles (kept while in 2D)
+    float azimuth3D = 30.0f;       // 3D orbit angles (kept while in 2D), degrees
     float elevation3D = 38.0f;
     float fov3D = 50.0f;
     float blend = 0.0f;            // 0 = plan, 1 = 3D (linear in time)
@@ -77,8 +77,32 @@ struct CameraRig {
     // Starts a smooth move that shows a width x depth room with a margin.
     void frameRoom(float width, float depth, float aspect, bool animate = true);
 
-    // Orbit (3D only): drag by (dx, dy) pixels.
+    // Orbit (3D only): drag by (dx, dy) pixels. Immediate.
     void orbit(float dxPixels, float dyPixels);
+
+    // Turn by `turnDegrees` round the vertical axis and tilt by
+    // `tiltDegrees` (up = positive), gliding there over a fraction of a
+    // second. Repeated calls add up, so holding a key or button turns
+    // smoothly and continuously.
+    void orbitBy(float turnDegrees, float tiltDegrees);
+
+    // Glides back to the default 3D angles.
+    void resetOrbit();
+
+    // Turntable: while in 3D, the camera turns by autoRotateSpeed degrees per
+    // second. Dragging or stepping the camera turns it off.
+    bool autoRotate = false;
+    float autoRotateSpeed = 15.0f;
+
+    // Where orbitBy is heading. Exposed for tests and the UI.
+    float azimuthGoal = 30.0f;
+    float elevationGoal = 38.0f;
+    bool orbitGliding = false;
+
+    static constexpr float kDefaultAzimuth = 30.0f;
+    static constexpr float kDefaultElevation = 38.0f;
+    static constexpr float kMinElevation = 8.0f;
+    static constexpr float kMaxElevation = 89.0f;
 
     CameraState state(float aspect) const;
 };
