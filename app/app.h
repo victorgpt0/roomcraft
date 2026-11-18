@@ -79,6 +79,8 @@ private:
     void drawRightPanel();
     void drawStatusBar();
     void drawHelpWindow();
+    void drawCameraOverlay();
+    void turnCamera(float turnDegrees, float tiltDegrees);
     void drawFileDialogs();
     void applyTheme(float scale);
 
@@ -114,6 +116,9 @@ private:
     // Mouse interaction.
     int hoverId_ = -1;
     bool orbiting_ = false;
+    int orbitButton_ = 1;          // which mouse button is orbiting (0 left, 1 right)
+    bool leftOrbitPending_ = false; // left press on empty floor in 3D: a click or an orbit?
+    float pressX_ = 0, pressY_ = 0;
     bool panning_ = false;
     xform::Vec3 panGrab_{};
     float dragPlaneHeight_ = 0.0f;

@@ -142,6 +142,7 @@ void App::drawUi() {
     if (showHelp_) {
         drawHelpWindow();
     }
+    drawCameraOverlay();
     if (showSoftware_) {
         drawSoftwareWindow();
     }
@@ -277,8 +278,10 @@ void App::drawStatusBar() {
     if (!status_.empty() && glfwGetTime() - statusTime_ < 8.0) {
         left = status_;
     } else {
-        left = std::string("Left-drag: move   Right-drag: ") + (rig_.is3D() ? "orbit" : "pan") +
-               "   Wheel: zoom   Shift+wheel / R: rotate   Tab: 2D/3D   F1: help";
+        left = rig_.is3D() ? std::string("Drag a piece: move   Drag empty floor / right-drag: rotate view   Q/E: turn   "
+                                         "Wheel: zoom   Tab: 2D   F1: help")
+                           : std::string("Drag: move   Right-drag: pan   Wheel: zoom   R: rotate piece   "
+                                         "Tab: 3D   F1: help");
     }
     const float room = rightX - ImGui::GetCursorPosX() - 24.0f * uiScale_;
     while (left.size() > 4 && ImGui::CalcTextSize(left.c_str()).x > room) {
@@ -409,7 +412,33 @@ void App::drawLeftPanel() {
         ImGui::Checkbox("Wireframe", &renderOptions_.wireframe);
         ImGui::SameLine();
         ImGui::Checkbox("Back-face culling", &renderOptions_.backFaceCulling);
+        ImGui::SeparatorText("3D camera");
         ImGui::PushItemWidth(-110.0f * uiScale_);
+        // The sliders show the angle the camera is heading to, so they do
+        // not jitter while it glides.
+        float turn = std::fmod(rig_.orbitGliding ? rig_.azimuthGoal : rig_.azimuth3D, 360.0f);
+        if (turn < 0.0f) {
+            turn += 360.0f;
+        }
+        float tilt = rig_.orbitGliding ? rig_.elevationGoal : rig_.elevation3D;
+        const bool turned = ImGui::SliderFloat("Turn", &turn, 0.0f, 360.0f, "%.0f deg");
+        const bool tilted = ImGui::SliderFloat("Tilt", &tilt, editor::CameraRig::kMinElevation,
+                                               editor::CameraRig::kMaxElevation, "%.0f deg");
+        if (turned || tilted) {
+            rig_.set3D(true);
+            rig_.autoRotate = false;
+            rig_.orbitGliding = false;
+            rig_.azimuth3D = rig_.azimuthGoal = turn;
+            rig_.elevation3D = rig_.elevationGoal = tilt;
+        }
+        ImGui::Checkbox("Auto-rotate", &rig_.autoRotate);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat("##spin", &rig_.autoRotateSpeed, -60.0f, 60.0f, "%.0f deg/s");
+        if (ImGui::Button("Reset view angle", ImVec2(-1.0f, 0.0f))) {
+            rig_.set3D(true);
+            rig_.resetOrbit();
+        }
         ImGui::SliderFloat("Field of view", &rig_.fov3D, 20.0f, 90.0f, "%.0f deg");
         ImGui::SliderFloat("Transition", &rig_.transitionSeconds, 0.1f, 3.0f, "%.1f s");
         ImGui::PopItemWidth();
@@ -621,6 +650,77 @@ void App::drawRightPanel() {
     ImGui::End();
 }
 
+// ---- Camera control in the corner of the view -------------------------------------------------
+//
+// A small always-visible panel, so rotating the 3D camera does not depend on
+// knowing the mouse shortcuts (or having a right mouse button). The arrow
+// buttons repeat while held; each repeat adds a step, which the camera rig
+// glides through smoothly.
+
+void App::drawCameraOverlay() {
+    const float margin = 10.0f * uiScale_;
+    ImGui::SetNextWindowPos(ImVec2(viewX_ + viewW_ - margin, viewY_ + viewH_ - margin), ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.82f);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+    if (!ImGui::Begin("##camera", nullptr, flags)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::TextDisabled(rig_.is3D() ? "Rotate view" : "Rotate (opens 3D)");
+
+    const float cell = ImGui::GetFrameHeight();
+    const float gap = ImGui::GetStyle().ItemSpacing.x;
+    ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+    // Row 1: tilt up.
+    ImGui::Dummy(ImVec2(cell, cell));
+    ImGui::SameLine();
+    if (ImGui::ArrowButton("##higher", ImGuiDir_Up)) {
+        turnCamera(0.0f, 10.0f);
+    }
+    ImGui::SetItemTooltip("Look from higher (Page Up)");
+    // Row 2: turn left, reset, turn right.
+    if (ImGui::ArrowButton("##left", ImGuiDir_Left)) {
+        turnCamera(15.0f, 0.0f);
+    }
+    ImGui::SetItemTooltip("Turn left (Q)");
+    ImGui::SameLine();
+    ImGui::PopItemFlag();
+    if (ImGui::Button("o", ImVec2(cell, cell))) {
+        if (!rig_.is3D()) {
+            rig_.set3D(true);
+        }
+        rig_.resetOrbit();
+    }
+    ImGui::SetItemTooltip("Reset the view angle");
+    ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+    ImGui::SameLine();
+    if (ImGui::ArrowButton("##right", ImGuiDir_Right)) {
+        turnCamera(-15.0f, 0.0f);
+    }
+    ImGui::SetItemTooltip("Turn right (E)");
+    // Row 3: tilt down.
+    ImGui::Dummy(ImVec2(cell, cell));
+    ImGui::SameLine();
+    if (ImGui::ArrowButton("##lower", ImGuiDir_Down)) {
+        turnCamera(0.0f, -10.0f);
+    }
+    ImGui::SetItemTooltip("Look from lower (Page Down)");
+    ImGui::PopItemFlag();
+
+    // Turntable, to the right of the arrows.
+    ImGui::SameLine(0.0f, gap * 3.0f);
+    bool spin = rig_.autoRotate;
+    if (ImGui::Checkbox("Auto-rotate", &spin)) {
+        if (spin && !rig_.is3D()) {
+            rig_.set3D(true);
+        }
+        rig_.autoRotate = spin;
+    }
+    ImGui::End();
+}
+
 // ---- Help and files ---------------------------------------------------------------------------
 
 void App::drawHelpWindow() {
@@ -639,13 +739,18 @@ void App::drawHelpWindow() {
     };
     if (ImGui::BeginTable("keys", 2, ImGuiTableFlags_RowBg)) {
         row("Left click", "Select a piece (click empty floor to deselect)");
-        row("Left drag", "Move the piece (snaps to the grid)");
-        row("Right drag", "3D: orbit the camera   2D: pan");
+        row("Left drag", "On a piece: move it (snaps to the grid)");
+        row("", "On empty floor in 3D: rotate the view");
+        row("Right drag", "3D: rotate the view   2D: pan");
+        row("Q / E", "Turn the 3D view left / right");
+        row("Page Up / Down", "Look from higher / lower");
+        row("Arrows (nothing selected)", "Turn and tilt the 3D view");
+        row("Corner buttons", "Rotate, reset the angle, auto-rotate");
         row("Middle drag", "Pan");
         row("Wheel", "Zoom towards the mouse");
         row("Shift + wheel", "Rotate the selected piece");
         row("R / Shift+R", "Rotate +/- 15 degrees");
-        row("Arrow keys", "Nudge by one grid step (Shift: 1 cm)");
+        row("Arrows (piece selected)", "Nudge by one grid step (Shift: 1 cm)");
         row("Del / Backspace", "Delete");
         row("Ctrl+D", "Duplicate");
         row("Ctrl+Z / Ctrl+Y", "Undo / redo");

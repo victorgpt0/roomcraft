@@ -313,7 +313,8 @@ void App::handleMouse() {
         }
     }
 
-    // Left button: select and drag.
+    // Left button: on a piece, select and drag it. On empty floor in 3D,
+    // a drag orbits the camera and a click (no movement) deselects.
     if (overView && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         xform::Vec3 hit{};
         const int index = pickUnderMouse(&hit);
@@ -323,8 +324,25 @@ void App::handleMouse() {
             // grabbed, so the grabbed point stays under the mouse in 3D too.
             dragPlaneHeight_ = rig_.blend <= 0.0f ? 0.0f : hit.y;
             editor_.beginDrag(item.id, {hit.x, hit.z});
+        } else if (rig_.is3D() && !rig_.transitioning()) {
+            leftOrbitPending_ = true;
+            pressX_ = mouse.x;
+            pressY_ = mouse.y;
         } else {
             editor_.select(-1);
+        }
+    }
+    if (leftOrbitPending_) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            leftOrbitPending_ = false; // released without moving: a click
+            editor_.select(-1);
+        } else if (std::hypot(mouse.x - pressX_, mouse.y - pressY_) > 4.0f) {
+            leftOrbitPending_ = false; // moved: it is an orbit
+            orbiting_ = true;
+            orbitButton_ = ImGuiMouseButton_Left;
+            // Catch up on the movement since the press, except this frame's,
+            // which the orbit code below applies.
+            rig_.orbit(mouse.x - dx - pressX_, mouse.y - dy - pressY_);
         }
     }
     if (editor_.dragging()) {
@@ -342,6 +360,7 @@ void App::handleMouse() {
     const bool middlePressed = overView && ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
     if ((rightPressed && rig_.is3D()) && !rig_.transitioning()) {
         orbiting_ = true;
+        orbitButton_ = ImGuiMouseButton_Right;
     } else if (rightPressed || middlePressed) {
         // Panning keeps the floor point that was grabbed under the mouse:
         // after each move, shift the camera by however far that point has
@@ -350,9 +369,10 @@ void App::handleMouse() {
         rig_.framing = false;
     }
     if (orbiting_) {
-        rig_.orbit(dx, dy);
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        if (!ImGui::IsMouseDown(orbitButton_)) {
             orbiting_ = false;
+        } else if (dx != 0.0f || dy != 0.0f) {
+            rig_.orbit(dx, dy);
         }
     }
     if (panning_) {
@@ -427,7 +447,20 @@ void App::handleKeyboard() {
 
     if (pressed(ImGuiKey_Tab)) {
         rig_.set3D(!rig_.is3D());
-        setStatus(rig_.is3D() ? "3D view (right-drag to orbit)" : "2D plan");
+        setStatus(rig_.is3D() ? "3D view: drag empty floor (or right-drag) to rotate, Q/E to turn" : "2D plan");
+    }
+
+    // Camera rotation: Q/E turn, Page Up/Down tilt, and the arrow keys when
+    // no piece is selected (with a selection they move the piece).
+    if (repeat(ImGuiKey_Q)) turnCamera(15.0f, 0.0f);
+    if (repeat(ImGuiKey_E)) turnCamera(-15.0f, 0.0f);
+    if (repeat(ImGuiKey_PageUp)) turnCamera(0.0f, 10.0f);
+    if (repeat(ImGuiKey_PageDown)) turnCamera(0.0f, -10.0f);
+    if (editor_.selected() == nullptr) {
+        if (repeat(ImGuiKey_LeftArrow)) turnCamera(15.0f, 0.0f);
+        if (repeat(ImGuiKey_RightArrow)) turnCamera(-15.0f, 0.0f);
+        if (repeat(ImGuiKey_UpArrow)) turnCamera(0.0f, 10.0f);
+        if (repeat(ImGuiKey_DownArrow)) turnCamera(0.0f, -10.0f);
     }
     if (pressed(ImGuiKey_F)) {
         frameRoom();
@@ -487,6 +520,15 @@ void App::handleKeyboard() {
         }
         editor_.nudgeSelected(wx * step, wz * step);
     }
+}
+
+// Rotating from the plan first switches to 3D: the plan always looks straight
+// down, so there is nothing to rotate there.
+void App::turnCamera(float turnDegrees, float tiltDegrees) {
+    if (!rig_.is3D()) {
+        rig_.set3D(true);
+    }
+    rig_.orbitBy(turnDegrees, tiltDegrees);
 }
 
 // ---- Labels -----------------------------------------------------------------------------

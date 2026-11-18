@@ -9,11 +9,13 @@
 #include "app.h"
 
 #include "editor/layout.h"
+#include "editor/picking.h"
 #include "gfx/gl.h"
 #include "raster/canvas.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
+#include <imgui_internal.h> // FindWindowByName, for the interaction check only
 
 #include <algorithm>
 #include <cmath>
@@ -365,15 +367,65 @@ bool App::captureStep(int f) {
         heightBefore = rig_.viewHeight;
         io.AddMouseWheelEvent(0.0f, 2.0f);
     }
+    static ImVec2 floorPixel{};
+    static unsigned revisionBefore = 0;
     if (f == 279) {
         check(std::fabs(rig_.viewHeight - heightBefore * 0.88f * 0.88f) < 1.0f, "two wheel clicks zoom in by 0.88^2");
-        rig_.azimuth3D = 30.0f;
+        // Find a pixel showing empty floor: its ray hits no piece and meets
+        // the floor inside the room.
+        const editor::CameraState s = cameraState();
+        bool found = false;
+        for (float py = 0.55f; py < 0.95f && !found; py += 0.05f) {
+            for (float px = 0.1f; px < 0.9f && !found; px += 0.05f) {
+                const editor::Ray ray = editor::rayThroughNdc(s, px * 2.0f - 1.0f, 1.0f - py * 2.0f);
+                xform::Vec3 hit{};
+                const editor::Room& room = editor_.layout().room;
+                if (editor::pickItem(editor_.layout(), ray).index < 0 && editor::intersectHorizontalPlane(ray, 0.0f, hit) &&
+                    hit.x > 20.0f && hit.x < room.width - 20.0f && hit.z > 20.0f && hit.z < room.depth - 20.0f) {
+                    floorPixel = ImVec2(viewX_ + px * viewW_, viewY_ + py * viewH_);
+                    found = true;
+                }
+            }
+        }
+        check(found, "found empty floor to drag on");
+        editor_.select(-1);
+        io.AddMousePosEvent(floorPixel.x, floorPixel.y);
+    }
+    if (f == 281) {
+        azimuthBefore = rig_.azimuth3D;
+        revisionBefore = editor_.revision();
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    }
+    if (f >= 283 && f <= 292) io.AddMousePosEvent(floorPixel.x - 12.0f * static_cast<float>(f - 282), floorPixel.y);
+    if (f == 294) io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    if (f == 296) {
+        std::printf("  (left-drag turned the view by %.2f degrees)\n", rig_.azimuth3D - azimuthBefore);
+        check(std::fabs((rig_.azimuth3D - azimuthBefore) - 120.0f * 0.3f) < 0.5f,
+              "left-drag of 120 px on empty floor rotates the 3D view by 36 degrees");
+        check(editor_.revision() == revisionBefore && editor_.selectedId() == -1,
+              "... and moves no furniture and selects nothing");
+        azimuthBefore = rig_.azimuth3D;
+        io.AddKeyEvent(ImGuiKey_Q, true);
+    }
+    if (f == 297) io.AddKeyEvent(ImGuiKey_Q, false);
+    if (f == 330) {
+        check(std::fabs((rig_.azimuth3D - azimuthBefore) - 15.0f) < 0.01f && !rig_.orbitGliding,
+              "Q turns the view 15 degrees, gliding there");
+        check(ImGui::FindWindowByName("##camera") != nullptr, "the on-screen rotate control is shown");
+        azimuthBefore = rig_.azimuth3D;
+        rig_.autoRotate = true;
+    }
+    if (f == 360) {
+        check(std::fabs((rig_.azimuth3D - azimuthBefore) - rig_.autoRotateSpeed * 0.5f) < 0.05f,
+              "auto-rotate turns at its set speed");
+        rig_.autoRotate = false;
+        rig_.azimuth3D = rig_.azimuthGoal = 30.0f;
         rig_.set3D(false);
         frameRoom(false);
     }
 
     // ---- GIF: plan -> 3D, a third of an orbit, back to the plan -------------
-    const int r = 340; // recording starts here
+    const int r = 420; // recording starts here
     if (f == r) {
         editor_.select(-1);
         recordDownscale_ = 2;
