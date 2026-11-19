@@ -14,7 +14,7 @@ namespace {
 // Vertex shader: places each vertex. uModel stretches heights during the
 // 2D-to-3D transition (or flattens a shadow onto the floor); uViewProj is
 // projection * view from the camera rig - our own view::Mat4.
-const char* kVertexShader = R"(#version 330 core
+const char* kVertexShader = ROOMCRAFT_GLSL_VERSION R"(
 in vec3 aPos;
 in vec3 aNormal;
 in vec3 aColor;
@@ -39,7 +39,7 @@ void main() {
 // The ceiling lamp is a point light whose strength falls off with distance
 // (attenuation 1 / (1 + k1 d + k2 d^2)). uLit blends from the flat plan
 // colours (0) to the lit result (1). uMode 1 draws a flat colour (shadows).
-const char* kFragmentShader = R"(#version 330 core
+const char* kFragmentShader = ROOMCRAFT_GLSL_VERSION R"(
 in vec3 vPos;
 in vec3 vNormal;
 in vec3 vColor;
@@ -264,9 +264,12 @@ void Renderer::render(const editor::Editor& editor, const editor::CameraState& c
         shader_.set("uLit", e);
     }
 
+#ifndef __EMSCRIPTEN__
+    // WebGL has no glPolygonMode, so the wireframe view is desktop-only.
     if (options.wireframe) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
+#endif
 
     if (plan) {
         // ---- Plan: flat footprints in list order, each a little higher so
@@ -347,9 +350,11 @@ void Renderer::render(const editor::Editor& editor, const editor::CameraState& c
         }
     }
 
+#ifndef __EMSCRIPTEN__
     if (options.wireframe) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
+#endif
     glDisable(GL_POLYGON_OFFSET_FILL);
 
     // ---- Selection outline: on top in the plan, depth-tested in 3D (so it

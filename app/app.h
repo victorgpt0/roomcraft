@@ -59,6 +59,10 @@ private:
     // ---- app.cpp ----
     bool initWindow();
     void shutdown();
+    bool step();
+#ifdef __EMSCRIPTEN__
+    void fitCanvasToPage();
+#endif
     void frame(float dt);
     void handleMouse();
     void handleKeyboard();
@@ -82,7 +86,7 @@ private:
     void drawCameraOverlay();
     void turnCamera(float turnDegrees, float tiltDegrees);
     void drawFileDialogs();
-    void applyTheme(float scale);
+    void applyTheme(float scale, float fontPixelDensity = 1.0f);
 
     // ---- capture.cpp ----
     bool readFramebuffer(std::vector<unsigned char>& rgb, int& width, int& height) const;
@@ -98,6 +102,7 @@ private:
 
     Options options_;
     GLFWwindow* window_ = nullptr;
+    double lastTime_ = 0.0;
 
     editor::Editor editor_;
     editor::CameraRig rig_;
@@ -129,6 +134,7 @@ private:
     bool showHelp_ = false;
     bool showSoftware_ = false;
     bool showImGuiDemo_ = false;
+    bool screenshotPending_ = false;
     bool openSavePopup_ = false;
     bool openOpenPopup_ = false;
     char fileName_[128] = "my_room";

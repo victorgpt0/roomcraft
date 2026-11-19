@@ -7,6 +7,7 @@
 // (our own GIF encoder with LZW) writes animations.
 
 #include "app.h"
+#include "platform.h"
 
 #include "editor/layout.h"
 #include "editor/picking.h"
@@ -100,11 +101,23 @@ bool App::readFramebuffer(std::vector<unsigned char>& rgb, int& width, int& heig
     if (width <= 0 || height <= 0) {
         return false;
     }
-    rgb.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1); // rows are not padded to 4 bytes
+    // Read RGBA (the one format every OpenGL and WebGL 2 driver must
+    // support), then drop the alpha bytes.
+    const std::size_t pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    std::vector<unsigned char> rgba(pixels * 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
     glReadBuffer(GL_BACK);
-    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
-    return glGetError() == GL_NO_ERROR;
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    if (glGetError() != GL_NO_ERROR) {
+        return false;
+    }
+    rgb.resize(pixels * 3);
+    for (std::size_t i = 0; i < pixels; ++i) {
+        rgb[i * 3 + 0] = rgba[i * 4 + 0];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
+    }
+    return true;
 }
 
 bool App::saveScreenshot(const std::string& requestedPath) {
@@ -122,6 +135,9 @@ bool App::saveScreenshot(const std::string& requestedPath) {
     // holds exactly the picture on screen.)
     const bool ok = readFramebuffer(rgb, width, height) && toCanvas(rgb, width, height, 1).saveBMP(path);
     setStatus(ok ? "Screenshot saved: " + path : "Could not save " + path);
+    if (ok && requestedPath.empty()) {
+        platform::offerDownload(path);
+    }
     return ok;
 }
 
@@ -180,6 +196,9 @@ void App::stopRecording() {
     const int frames = recorder_->frameCount();
     recorder_.reset();
     setStatus(ok ? "Saved " + path + " (" + std::to_string(frames) + " frames)" : "Could not write " + path);
+    if (ok && options_.captureDirectory.empty()) {
+        platform::offerDownload(path);
+    }
 }
 
 void App::recordFrame(float dt) {

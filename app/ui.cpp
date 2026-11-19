@@ -6,6 +6,7 @@
 // editor's state and call the editor's operations directly.
 
 #include "app.h"
+#include "platform.h"
 
 #include "editor/catalogue.h"
 #include "editor/layout.h"
@@ -95,7 +96,7 @@ std::vector<std::string> listLayouts(const std::string& folder) {
 
 // ---- Theme ----------------------------------------------------------------------------------
 
-void App::applyTheme(float scale) {
+void App::applyTheme(float scale, float fontPixelDensity) {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGui::StyleColorsDark(&style);
     style.WindowRounding = 0.0f;
@@ -125,10 +126,13 @@ void App::applyTheme(float scale) {
 
     ImGuiIO& io = ImGui::GetIO();
     ImFontConfig font;
-    font.SizePixels = std::round(13.0f * scale * 1.15f);
+    // The font is rasterised fontPixelDensity times larger and drawn scaled
+    // back down, so on a high-DPI framebuffer each glyph has real pixels.
+    font.SizePixels = std::round(13.0f * scale * 1.15f * fontPixelDensity);
     font.OversampleH = 2;
     io.Fonts->Clear();
     io.Fonts->AddFontDefault(&font);
+    io.FontGlobalScale = 1.0f / fontPixelDensity;
 }
 
 // ---- Whole UI ------------------------------------------------------------------------------
@@ -179,14 +183,16 @@ void App::drawMenuBar() {
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Screenshot (BMP)", "F12")) {
-            saveScreenshot("");
+            screenshotPending_ = true; // taken once the frame is drawn
         }
         if (ImGui::MenuItem(recorder_ ? "Stop recording" : "Record GIF", nullptr, recorder_ != nullptr)) {
             recorder_ ? stopRecording() : startRecording();
         }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Quit")) {
-            glfwSetWindowShouldClose(window_, GLFW_TRUE);
+        if (!platform::kWeb) {
+            ImGui::Separator();
+            if (ImGui::MenuItem("Quit")) {
+                glfwSetWindowShouldClose(window_, GLFW_TRUE);
+            }
         }
         ImGui::EndMenu();
     }
@@ -409,7 +415,9 @@ void App::drawLeftPanel() {
         helpMarker("In 3D, walls between the camera and the room are cut down so you can see inside.");
         ImGui::SameLine();
         ImGui::Checkbox("Shadows", &renderOptions_.shadows);
-        ImGui::Checkbox("Wireframe", &renderOptions_.wireframe);
+#ifndef __EMSCRIPTEN__
+        ImGui::Checkbox("Wireframe", &renderOptions_.wireframe); // no glPolygonMode in WebGL
+#endif
         ImGui::SameLine();
         ImGui::Checkbox("Back-face culling", &renderOptions_.backFaceCulling);
         ImGui::SeparatorText("3D camera");
@@ -777,7 +785,11 @@ void App::drawFileDialogs() {
 
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Save layout", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Saved in the \"%s\" folder as a .rclayout text file.", kLayoutFolder);
+        if (platform::kWeb) {
+            ImGui::TextUnformatted("Saved in this browser (File > Open lists it on your next visit).");
+        } else {
+            ImGui::Text("Saved in the \"%s\" folder as a .rclayout text file.", kLayoutFolder);
+        }
         if (ImGui::IsWindowAppearing()) {
             ImGui::SetKeyboardFocusHere();
         }
@@ -796,7 +808,8 @@ void App::drawFileDialogs() {
                 const std::string path = std::string(kLayoutFolder) + "/" + name + ".rclayout";
                 if (editor_.save(path)) {
                     currentFile_ = path;
-                    setStatus("Saved " + path);
+                    platform::persistSavedLayouts();
+                    setStatus(platform::kWeb ? "Saved \"" + name + "\" in this browser" : "Saved " + path);
                 } else {
                     setStatus("Could not save " + path);
                 }

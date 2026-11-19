@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoomCraft</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #292b30; }
+  /* The canvas fills the window; the app resizes its framebuffer to match
+     (App::fitCanvasToPage). */
+  #canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #c8c8cc; font: 15px/1.4 system-ui, sans-serif; text-align: center; padding: 16px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status">Loading RoomCraft…</div>
+<script>
+  const statusEl = document.getElementById('status');
+  const canvas = document.getElementById('canvas');
+
+  // The app's own shortcuts (Tab, Ctrl+S, Ctrl+O, Ctrl+Z, F1...) must not
+  // also trigger the browser's.
+  canvas.addEventListener('keydown', (e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (e.key === 'Tab' || e.key === 'F1' || (ctrl && 'sozyd'.includes(e.key.toLowerCase()))) {
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener('mousedown', () => canvas.focus());
+
+  if (!document.createElement('canvas').getContext('webgl2')) {
+    statusEl.textContent = 'RoomCraft needs WebGL 2, which this browser does not provide.';
+  }
+
+  var Module = {
+    canvas,
+    preRun: [() => {
+      // Saved layouts live in IndexedDB, so they survive a reload. Load them
+      // into /my_layouts before main() runs.
+      FS.mkdir('/my_layouts');
+      FS.mount(IDBFS, {}, '/my_layouts');
+      addRunDependency('my_layouts');
+      FS.syncfs(true, (error) => {
+        if (error) console.warn('RoomCraft: could not read saved layouts', error);
+        removeRunDependency('my_layouts');
+      });
+    }],
+    setStatus: (text) => {
+      statusEl.textContent = text ? text.replace(/^Downloading data\.\.\./, 'Loading RoomCraft…') : '';
+    },
+    onRuntimeInitialized: () => { statusEl.style.display = 'none'; canvas.focus(); },
+    onAbort: () => { statusEl.style.display = 'flex'; statusEl.textContent = 'RoomCraft stopped with an error (see the browser console).'; },
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

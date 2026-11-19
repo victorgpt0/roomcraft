@@ -29,6 +29,13 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
+#ifdef __EMSCRIPTEN__
+    // In a browser main() returns while the page keeps running frames, so
+    // the App must outlive it.
+    auto* application = new app::App(options);
+    return application->run();
+#else
     app::App application(options);
     return application.run();
+#endif
 }

@@ -341,6 +341,44 @@ The Linux commands should also work with Clang and CMake ≥ 3.20 (the app asks
 for an OpenGL 3.3 forward-compatible core context on macOS), but macOS was not
 tested for this project.
 
+### Web browser (WebAssembly + WebGL 2)
+
+The same app also builds for the web with [Emscripten](https://emscripten.org/).
+The browser provides WebGL 2 (OpenGL ES 3.0) and Emscripten provides GLFW,
+so only Dear ImGui is downloaded. The output is a static site that any web
+host can serve (GitHub Pages, Netlify, or any static file server).
+
+```sh
+# Once: install the Emscripten SDK (outside the repository)
+git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+~/emsdk/emsdk install latest && ~/emsdk/emsdk activate latest
+
+# Each new terminal
+source ~/emsdk/emsdk_env.sh
+
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web --target roomcraft_app -j
+
+# Try it locally (browsers will not run WebAssembly from file://)
+python3 -m http.server 8000 --directory build-web   # open http://localhost:8000
+```
+
+To publish the app, upload these four files from `build-web/`: `index.html`,
+`index.js`, `index.wasm` and `index.data` (the example layouts). The page
+template is [web/shell.html](web/shell.html); the browser-specific code is in
+[app/platform.cpp](app/platform.cpp) and behind `#ifdef __EMSCRIPTEN__`.
+
+Differences from the desktop app:
+
+- **Saved layouts** are kept in the browser (IndexedDB), not in a
+  `my_layouts/` folder. They are still there after a reload, but only in
+  that browser.
+- **Screenshots and GIF recordings** are downloaded by the browser.
+- **No wireframe toggle:** WebGL has no `glPolygonMode`.
+- **No Quit menu item:** close the tab instead.
+- **F12** may open the browser's developer tools instead of taking a
+  screenshot. **File > Screenshot (BMP)** always works.
+
 ### Running a single test
 
 ```sh

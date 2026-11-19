@@ -34,7 +34,14 @@ option(ROOMCRAFT_BUILD_APP "Build the interactive OpenGL app (downloads GLFW and
 if(ROOMCRAFT_BUILD_APP)
     enable_language(C)
     include(FetchContent)
-    find_package(OpenGL REQUIRED)
+    if(EMSCRIPTEN)
+        # Web build (emcmake): the browser provides WebGL 2 and Emscripten
+        # provides GLFW, so neither is downloaded or loaded at run time.
+        add_library(roomcraft_web_gl INTERFACE)
+        target_link_options(roomcraft_web_gl INTERFACE -sUSE_GLFW=3 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2)
+    else()
+        find_package(OpenGL REQUIRED)
+    endif()
 
     # GLFW: window, OpenGL context, mouse and keyboard.
     set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -55,7 +62,11 @@ if(ROOMCRAFT_BUILD_APP)
         GIT_TAG v1.91.9b
         GIT_SHALLOW TRUE
     )
-    FetchContent_MakeAvailable(glfw imgui)
+    if(EMSCRIPTEN)
+        FetchContent_MakeAvailable(imgui)
+    else()
+        FetchContent_MakeAvailable(glfw imgui)
+    endif()
 
     add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
@@ -67,14 +78,23 @@ if(ROOMCRAFT_BUILD_APP)
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     )
     target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-    target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+    if(EMSCRIPTEN)
+        target_link_libraries(imgui PUBLIC roomcraft_web_gl)
+        # The web build has no glad: gfx/gl.h includes <GLES3/gl3.h>.
+        add_library(roomcraft_gl INTERFACE)
+        target_link_libraries(roomcraft_gl INTERFACE roomcraft_web_gl)
+    else()
+        target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 
-    # glad: loads the OpenGL 3.3 core functions at run time. Generated with
-    # glad 0.1.36 (see third_party/glad/src/glad.c for the command line).
-    add_library(glad STATIC third_party/glad/src/glad.c)
-    target_include_directories(glad PUBLIC third_party/glad/include)
-    if(UNIX)
-        target_link_libraries(glad PUBLIC ${CMAKE_DL_LIBS})
+        # glad: loads the OpenGL 3.3 core functions at run time. Generated with
+        # glad 0.1.36 (see third_party/glad/src/glad.c for the command line).
+        add_library(glad STATIC third_party/glad/src/glad.c)
+        target_include_directories(glad PUBLIC third_party/glad/include)
+        if(UNIX)
+            target_link_libraries(glad PUBLIC ${CMAKE_DL_LIBS})
+        endif()
+        add_library(roomcraft_gl INTERFACE)
+        target_link_libraries(roomcraft_gl INTERFACE glad OpenGL::GL)
     endif()
 
     # Our OpenGL layer: shaders, GPU meshes and the scene renderer.
@@ -84,7 +104,7 @@ if(ROOMCRAFT_BUILD_APP)
         src/gfx/renderer.cpp
     )
     target_include_directories(gfx PUBLIC src)
-    target_link_libraries(gfx PUBLIC editor glad OpenGL::GL)
+    target_link_libraries(gfx PUBLIC editor roomcraft_gl)
     roomcraft_warnings(gfx)
 
     add_executable(roomcraft_app
@@ -93,11 +113,31 @@ if(ROOMCRAFT_BUILD_APP)
         app/ui.cpp
         app/capture.cpp
         app/software_view.cpp
+        app/platform.cpp
     )
     target_include_directories(roomcraft_app PRIVATE app)
-    target_link_libraries(roomcraft_app PRIVATE gfx imgui glfw output view)
-    # The example layouts are listed in File > Open wherever the app runs from.
-    target_compile_definitions(roomcraft_app PRIVATE ROOMCRAFT_EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/layouts")
+    if(EMSCRIPTEN)
+        target_link_libraries(roomcraft_app PRIVATE gfx imgui output view)
+        # The example layouts are packed into the page at /layouts; the
+        # user's own layouts live in /my_layouts, backed by IndexedDB.
+        target_compile_definitions(roomcraft_app PRIVATE ROOMCRAFT_EXAMPLES_DIR="/layouts")
+        set(ROOMCRAFT_WEB_SHELL ${CMAKE_SOURCE_DIR}/web/shell.html)
+        set_target_properties(roomcraft_app PROPERTIES
+            OUTPUT_NAME index
+            SUFFIX .html
+            LINK_DEPENDS ${ROOMCRAFT_WEB_SHELL})
+        target_link_options(roomcraft_app PRIVATE
+            --shell-file ${ROOMCRAFT_WEB_SHELL}
+            --preload-file ${CMAKE_SOURCE_DIR}/layouts@/layouts
+            -lidbfs.js
+            -sALLOW_MEMORY_GROWTH=1
+            -sEXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency
+            -sENVIRONMENT=web)
+    else()
+        target_link_libraries(roomcraft_app PRIVATE gfx imgui glfw output view)
+        # The example layouts are listed in File > Open wherever the app runs from.
+        target_compile_definitions(roomcraft_app PRIVATE ROOMCRAFT_EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/layouts")
+    endif()
     roomcraft_warnings(roomcraft_app)
 
     # The scripted capture opens a (hidden) window, so it needs a display and

@@ -1,4 +1,5 @@
 #include "app.h"
+#include "platform.h"
 
 #include "editor/layout.h"
 #include "editor/picking.h"
@@ -8,6 +9,10 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -44,9 +49,16 @@ bool App::initWindow() {
     // OpenGL 3.3 core profile: modern, shader-based OpenGL with the old
     // fixed-function calls removed. Supported by every GPU of the last
     // fifteen years.
+#ifdef __EMSCRIPTEN__
+    // In the browser: WebGL 2 (OpenGL ES 3.0) on the page's <canvas>.
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#else
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#endif
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
@@ -60,6 +72,8 @@ bool App::initWindow() {
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
     }
 
+    // In the browser the window is the whole page, not a fixed size.
+    platform::pageSize(options_.width, options_.height);
     window_ = glfwCreateWindow(options_.width, options_.height, "RoomCraft - 2D to 3D room planner", nullptr, nullptr);
     if (window_ == nullptr) {
         std::fprintf(stderr, "Could not create an OpenGL 3.3 window\n");
@@ -69,13 +83,17 @@ bool App::initWindow() {
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1); // wait for the screen refresh: no tearing, no wasted frames
 
+#ifndef __EMSCRIPTEN__
     if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0) {
         std::fprintf(stderr, "Could not load the OpenGL functions\n");
         return false;
     }
+#endif
     std::printf("OpenGL %s on %s\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                 reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-    glEnable(GL_MULTISAMPLE);
+#ifndef __EMSCRIPTEN__
+    glEnable(GL_MULTISAMPLE); // WebGL: multisampling is always on when the canvas asks for it
+#endif
 
     std::string error;
     renderer_ = std::make_unique<gfx::Renderer>();
@@ -94,11 +112,22 @@ bool App::initWindow() {
     if (options_.captureDirectory.empty()) {
         glfwGetWindowContentScale(window_, &scaleX, &scaleY);
     }
+#ifdef __EMSCRIPTEN__
+    // In the browser, sizes are CSS pixels, which the browser already scales
+    // for high-DPI screens: the panels keep their normal size. Only the font
+    // is drawn at the screen's real pixel density, so text stays sharp.
+    uiScale_ = 1.0f;
+    applyTheme(uiScale_, std::clamp(scaleX, 1.0f, 3.0f));
+#else
     uiScale_ = std::clamp(scaleX, 1.0f, 3.0f);
     applyTheme(uiScale_);
+#endif
 
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+#ifdef __EMSCRIPTEN__
+    ImGui_ImplGlfw_InstallEmscriptenCallbacks(window_, "#canvas"); // mouse wheel, canvas resize
+#endif
+    ImGui_ImplOpenGL3_Init(ROOMCRAFT_IMGUI_GLSL_VERSION);
     return true;
 }
 
@@ -124,39 +153,85 @@ int App::run() {
     updateViewport();
     frameRoom(false);
     setStatus("Welcome to RoomCraft. Drag furniture to move it; Tab switches between the 2D plan and 3D.");
+    lastTime_ = glfwGetTime();
 
-    double last = glfwGetTime();
-    while (glfwWindowShouldClose(window_) == GLFW_FALSE) {
-        glfwPollEvents();
-        const double now = glfwGetTime();
-        float dt = static_cast<float>(now - last);
-        last = now;
-        if (!options_.captureDirectory.empty()) {
-            dt = 1.0f / 60.0f; // the scripted capture runs on a fixed clock
-        }
-        dt = std::min(dt, 0.1f);
-
-        int fbWidth = 0, fbHeight = 0;
-        glfwGetFramebufferSize(window_, &fbWidth, &fbHeight);
-        if (fbWidth == 0 || fbHeight == 0) {
-            glfwWaitEvents(); // minimised
-            continue;
-        }
-        frame(dt);
-
-        if (!options_.captureDirectory.empty()) {
-            if (!captureStep(captureFrame_++)) {
-                break;
-            }
-        } else {
-            recordFrame(dt);
-        }
-        glfwSwapBuffers(window_);
+#ifdef __EMSCRIPTEN__
+    // A browser page must not block: the browser calls step() once per
+    // display refresh (requestAnimationFrame) instead of a while loop.
+    // run() does not return; the page keeps the App alive.
+    emscripten_set_main_loop_arg([](void* self) { static_cast<App*>(self)->step(); }, this, 0, true);
+    return 0;
+#else
+    while (glfwWindowShouldClose(window_) == GLFW_FALSE && step()) {
     }
     const int code = captureFailed_ ? 1 : 0;
     shutdown();
     return code;
+#endif
 }
+
+// One pass of the main loop: events, one frame, swap. Returns false when
+// the scripted capture has finished.
+bool App::step() {
+    glfwPollEvents();
+#ifdef __EMSCRIPTEN__
+    fitCanvasToPage();
+#endif
+    const double now = glfwGetTime();
+    float dt = static_cast<float>(now - lastTime_);
+    lastTime_ = now;
+    if (!options_.captureDirectory.empty()) {
+        dt = 1.0f / 60.0f; // the scripted capture runs on a fixed clock
+    }
+    dt = std::min(dt, 0.1f);
+
+    int fbWidth = 0, fbHeight = 0;
+    glfwGetFramebufferSize(window_, &fbWidth, &fbHeight);
+    if (fbWidth == 0 || fbHeight == 0) {
+#ifndef __EMSCRIPTEN__
+        glfwWaitEvents(); // minimised
+#endif
+        return true;
+    }
+    frame(dt);
+
+    if (!options_.captureDirectory.empty()) {
+        if (!captureStep(captureFrame_++)) {
+            return false;
+        }
+    } else {
+        // Screenshots are read back after the frame is drawn and before the
+        // swap, while the back buffer holds exactly what is about to be
+        // shown. (In a browser the buffer is cleared once shown, so this is
+        // the only moment it can be read.)
+        if (screenshotPending_) {
+            screenshotPending_ = false;
+            saveScreenshot("");
+        }
+        recordFrame(dt);
+    }
+    glfwSwapBuffers(window_);
+    return true;
+}
+
+#ifdef __EMSCRIPTEN__
+// The window is the whole browser page. When the page is resized, resize the
+// GLFW window (and so the canvas and its framebuffer) to match. The page's
+// size is measured, not the canvas's: Emscripten's GLFW fixes the canvas's
+// CSS size to the window size, so the canvas never grows by itself. The side
+// panels keep their widths; the room view in the middle takes the rest.
+void App::fitCanvasToPage() {
+    int width = 0, height = 0;
+    if (!platform::pageSize(width, height)) {
+        return;
+    }
+    int current[2] = {0, 0};
+    glfwGetWindowSize(window_, &current[0], &current[1]);
+    if (width > 0 && height > 0 && (width != current[0] || height != current[1])) {
+        glfwSetWindowSize(window_, width, height);
+    }
+}
+#endif
 
 // ---- One frame -------------------------------------------------------------------------
 
@@ -473,7 +548,7 @@ void App::handleKeyboard() {
         showHelp_ = !showHelp_;
     }
     if (pressed(ImGuiKey_F12)) {
-        saveScreenshot("");
+        screenshotPending_ = true; // taken once the frame is drawn
     }
     if (pressed(ImGuiKey_Escape)) {
         editor_.select(-1);
