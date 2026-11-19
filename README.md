@@ -364,7 +364,16 @@ python3 -m http.server 8000 --directory build-web   # open http://localhost:8000
 ```
 
 To publish the app, upload these four files from `build-web/`: `index.html`,
-`index.js`, `index.wasm` and `index.data` (the example layouts). The page
+`index.js`, `index.wasm` and `index.data` (the example layouts).
+
+**GitHub Pages** does this automatically:
+[.github/workflows/pages.yml](.github/workflows/pages.yml) builds the web
+app and deploys it on every push to `main` or `cp3/web`. To turn it on once,
+go to *Settings > Pages > Build and deployment > Source* and choose
+**GitHub Actions**. Do not choose "Deploy from a branch": that only serves
+committed files from `/` or `/docs` (with no `index.html` it shows the
+README), and the web app is build output that is never committed. `web/`
+holds only the page template. The page
 template is [web/shell.html](web/shell.html); the browser-specific code is in
 [app/platform.cpp](app/platform.cpp) and behind `#ifdef __EMSCRIPTEN__`.
 

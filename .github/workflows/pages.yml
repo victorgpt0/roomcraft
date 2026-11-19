@@ -1,0 +1,65 @@
+# Builds the RoomCraft web app (Emscripten -> WebAssembly + WebGL 2) and
+# publishes it to GitHub Pages.
+#
+# One-time setup: Settings > Pages > Build and deployment > Source:
+# "GitHub Actions". (Not "Deploy from a branch": that serves committed files
+# from / or /docs, but the site is build output that is never committed.)
+
+name: Deploy web app to GitHub Pages
+
+on:
+  push:
+    branches: [main, cp3/web]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push replaces a queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: 7.0.0 # the version the web build was tested with
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten ${{ env.EMSDK_VERSION }}
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+
+      - name: Build
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web --target roomcraft_app -j "$(nproc)"
+
+      - name: Collect the site
+        run: |
+          mkdir site
+          cp build-web/index.html build-web/index.js build-web/index.wasm build-web/index.data site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
